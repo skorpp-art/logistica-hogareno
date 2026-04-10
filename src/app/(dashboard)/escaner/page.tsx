@@ -61,15 +61,29 @@ interface ExtractedLabel {
 // ============================================================
 
 async function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
+  // Compress image to max 1200px and 0.7 quality to reduce size
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const MAX = 1200;
+      let w = img.width;
+      let h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("No canvas")); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
       const base64 = dataUrl.split(",")[1];
-      resolve({ base64, mediaType: file.type || "image/jpeg" });
+      resolve({ base64, mediaType: "image/jpeg" });
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
   });
 }
 
