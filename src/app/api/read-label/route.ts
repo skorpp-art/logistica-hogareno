@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY no configurada. Agregá ANTHROPIC_API_KEY en las variables de entorno de Vercel." },
+      { error: "GEMINI_API_KEY no configurada. Agregá GEMINI_API_KEY en las variables de entorno de Vercel." },
       { status: 500 }
     );
   }
@@ -16,38 +16,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se recibió imagen" }, { status: 400 });
     }
 
-    // Ensure valid media type for Anthropic API
-    const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    let finalMediaType = mediaType || "image/jpeg";
-    if (!validTypes.includes(finalMediaType)) {
-      finalMediaType = "image/jpeg";
-    }
+    const finalMediaType = mediaType || "image/jpeg";
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: finalMediaType,
-                  data: image,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: finalMediaType,
+                    data: image,
+                  },
                 },
-              },
-              {
-                type: "text",
-                text: `Sos un lector experto de etiquetas de envío argentinas (Mercado Libre Flex, Correo Argentino, OCA, Andreani, etc).
+                {
+                  text: `Sos un lector experto de etiquetas de envío argentinas (Mercado Libre Flex, Correo Argentino, OCA, Andreani, etc).
 
 Leé esta imagen de etiqueta de paquete y extraé la información. Devolvé ÚNICAMENTE un JSON válido con esta estructura:
 
@@ -75,29 +62,36 @@ REGLAS IMPORTANTES:
 - NO confundas números de envío/pack con números de teléfono
 - Si hay texto como "Pack: 12345" o "Envío: 12345", esos son los IDs
 - Si un campo no aparece dejalo como string vacío ""
-- Respondé SOLO el JSON, sin explicaciones ni markdown`,
-              },
-            ],
+- Respondé SOLO el JSON, sin explicaciones, sin markdown, sin backticks`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 1024,
           },
-        ],
-      }),
-    });
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error("Anthropic API error:", response.status, errorData);
+      console.error("Gemini API error:", response.status, errorData);
       return NextResponse.json(
-        { error: `Error de la API de IA: ${response.status} - ${errorData.substring(0, 200)}` },
+        { error: `Error de la API: ${response.status} - ${errorData.substring(0, 300)}` },
         { status: response.status }
       );
     }
 
     const data = await response.json();
-    const text = data.content?.[0]?.text || "";
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     let parsed;
     try {
-      parsed = JSON.parse(text);
+      // Clean markdown code blocks if present
+      const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      parsed = JSON.parse(cleaned);
     } catch {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
