@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   Package,
@@ -13,6 +13,11 @@ import {
   Clock,
   Users,
   Activity,
+  Search,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import type { Client } from "@/lib/types/database";
 
@@ -21,6 +26,7 @@ interface BultoRow {
   client_id: string;
   description: string | null;
   barcode: string | null;
+  tracking_id: string | null;
   status: string;
   entry_date: string;
   scheduled_return_date: string | null;
@@ -34,6 +40,8 @@ interface DateActivity {
   date: string;
   count: number;
 }
+
+const ITEMS_PER_PAGE = 20;
 
 export default function ControlOperativoPage() {
   const [rangeFrom, setRangeFrom] = useState(() => {
@@ -62,9 +70,42 @@ export default function ControlOperativoPage() {
   const [activeTab, setActiveTab] = useState<"bultos" | "metrics">("metrics");
   const [filterStatus, setFilterStatus] = useState("all");
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<BultoRow[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [highlightedBultoId, setHighlightedBultoId] = useState<string | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Clear highlight after 3 seconds
+  useEffect(() => {
+    if (highlightedBultoId) {
+      const timeout = setTimeout(() => setHighlightedBultoId(null), 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [highlightedBultoId]);
 
   const fetchData = async () => {
     const supabase = createClient();
@@ -84,6 +125,93 @@ export default function ControlOperativoPage() {
 
     setClients(clientsData || []);
     setLoading(false);
+  };
+
+  // Debounced search across ALL bultos
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchQuery(value);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      if (!value.trim()) {
+        setSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
+      searchTimeoutRef.current = setTimeout(() => {
+        const q = value.toLowerCase().trim();
+        const results = allBultos
+          .filter((b) => {
+            if (b.deleted_at !== null) return false;
+            const trackingMatch = b.tracking_id?.toLowerCase().includes(q);
+            const barcodeMatch = b.barcode?.toLowerCase().includes(q);
+            const descMatch = b.description?.toLowerCase().includes(q);
+            const clientMatch = b.clients?.name?.toLowerCase().includes(q);
+            return trackingMatch || barcodeMatch || descMatch || clientMatch;
+          })
+          .slice(0, 10);
+        setSearchResults(results);
+        setShowSearchResults(true);
+      }, 300);
+    },
+    [allBultos]
+  );
+
+  const handleSearchResultClick = (bulto: BultoRow) => {
+    setShowSearchResults(false);
+    setSearchQuery("");
+    setHighlightedBultoId(bulto.id);
+
+    // Switch to bultos tab
+    setActiveTab("bultos");
+
+    // Set filter to show this bulto
+    if (bulto.status === "returned") {
+      // If returned, we need to set filter to show all including returned
+      // But the current filters don't include returned, so just set to "all"
+      setFilterStatus("all");
+    } else {
+      setFilterStatus("all");
+    }
+
+    // Find what page the bulto is on and navigate there
+    setTimeout(() => {
+      const currentFiltered = allBultos.filter((b) => {
+        if (b.deleted_at !== null) return false;
+        if (bulto.status === "returned") {
+          // Show all including returned to find this one
+          return true;
+        }
+        return b.status !== "returned";
+      });
+      const idx = currentFiltered.findIndex((b) => b.id === bulto.id);
+      if (idx >= 0) {
+        const page = Math.floor(idx / ITEMS_PER_PAGE) + 1;
+        setCurrentPage(page);
+      }
+
+      // Scroll to table
+      setTimeout(() => {
+        const row = document.getElementById(`bulto-row-${bulto.id}`);
+        if (row) {
+          row.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 100);
+    }, 50);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "stored":
+        return { label: "Almacenado", classes: "bg-emerald-500/10 text-emerald-400" };
+      case "scheduled_return":
+        return { label: "Retorno prog.", classes: "bg-amber-500/10 text-amber-400" };
+      case "returned":
+        return { label: "Devuelto", classes: "bg-blue-500/10 text-blue-400" };
+      default:
+        return { label: status, classes: "bg-gray-500/10 text-gray-400" };
+    }
   };
 
   const metrics = useMemo(() => {
@@ -242,6 +370,90 @@ export default function ControlOperativoPage() {
     fetchData();
   };
 
+  // Export metrics to Excel
+  const handleExportReport = async () => {
+    const XLSX = await import("xlsx");
+
+    const onTimeRate =
+      metrics.totalReturns > 0
+        ? Math.round((metrics.onTime / metrics.totalReturns) * 100) + "%"
+        : "N/A";
+
+    // Sheet 1: Resumen
+    const resumenData = [
+      ["Reporte Operativo", ""],
+      ["Período", `${formatDate(rangeFrom)} - ${formatDate(rangeTo)}`],
+      ["", ""],
+      ["Métrica", "Valor"],
+      ["Total devoluciones en período", metrics.totalReturns],
+      ["Promedio por día laboral", metrics.avgPerDay],
+      ["Día pico", `${formatDate(metrics.peakDate)} (${metrics.peakCount} devoluciones)`],
+      ["Tiempo promedio almacenamiento (días)", metrics.avgStorageDays],
+      ["Stock antiguo (>7 días)", metrics.oldStock],
+      ["Tasa de puntualidad", onTimeRate],
+      ["Total bultos activos", metrics.totalBultos],
+      ["Almacenados actualmente", metrics.activeBultos],
+      ["Devueltos a tiempo", metrics.onTime],
+      ["Devueltos con demora", metrics.late],
+    ];
+
+    const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+
+    // Sheet 2: Detalle
+    const filteredForExport = allBultos.filter((b) => {
+      if (b.deleted_at !== null) return false;
+      return b.status !== "returned";
+    });
+
+    const detalleHeaders = [
+      "Tracking",
+      "Cliente",
+      "Descripción",
+      "Estado",
+      "Fecha Ingreso",
+      "Fecha Devolución",
+      "Días en depósito",
+    ];
+
+    const today = new Date();
+    const detalleRows = filteredForExport.map((b) => {
+      const entryDate = new Date(b.entry_date);
+      const diasEnDeposito = Math.floor(
+        (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const statusLabel =
+        b.status === "stored"
+          ? "Almacenado"
+          : b.status === "scheduled_return"
+          ? "Retorno programado"
+          : b.status === "returned"
+          ? "Devuelto"
+          : b.status;
+
+      return [
+        b.tracking_id || b.barcode || "-",
+        b.clients?.name || "-",
+        b.description || "-",
+        statusLabel,
+        formatDate(b.entry_date),
+        b.actual_return_date
+          ? formatDate(b.actual_return_date)
+          : b.scheduled_return_date
+          ? formatDate(b.scheduled_return_date)
+          : "-",
+        diasEnDeposito,
+      ];
+    });
+
+    const wsDetalle = XLSX.utils.aoa_to_sheet([detalleHeaders, ...detalleRows]);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+    XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
+
+    XLSX.writeFile(wb, `reporte_operativo_${rangeFrom}_${rangeTo}.xlsx`);
+  };
+
   const maxActivity = Math.max(
     ...metrics.activityDates.map((d) => d.count),
     1
@@ -257,11 +469,26 @@ export default function ControlOperativoPage() {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
-  const filteredBultos = allBultos.filter((b) => {
-    if (b.deleted_at !== null) return false;
-    if (filterStatus === "all") return b.status !== "returned";
-    return b.status === filterStatus;
-  });
+  const filteredBultos = useMemo(() => {
+    return allBultos.filter((b) => {
+      if (b.deleted_at !== null) return false;
+      if (filterStatus === "all") return b.status !== "returned";
+      return b.status === filterStatus;
+    });
+  }, [allBultos, filterStatus]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus]);
+
+  // Pagination calculations
+  const totalItems = filteredBultos.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+  const paginatedBultos = filteredBultos.slice(startIndex, endIndex);
 
   if (loading) {
     return (
@@ -291,23 +518,124 @@ export default function ControlOperativoPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 card-base px-3 sm:px-4 py-2.5 !rounded-xl overflow-x-auto">
-          <Calendar className="w-4 h-4 text-accent shrink-0" />
-          <span className="text-[10px] font-bold text-muted uppercase tracking-wider shrink-0 hidden sm:inline">Rango:</span>
-          <input
-            type="date"
-            value={rangeFrom}
-            onChange={(e) => setRangeFrom(e.target.value)}
-            className="text-[12px] sm:text-[13px] border-0 bg-transparent focus:outline-none text-foreground font-semibold min-w-0"
-          />
-          <span className="text-muted/40 shrink-0">—</span>
-          <input
-            type="date"
-            value={rangeTo}
-            onChange={(e) => setRangeTo(e.target.value)}
-            className="text-[12px] sm:text-[13px] border-0 bg-transparent focus:outline-none text-foreground font-semibold min-w-0"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 card-base px-3 sm:px-4 py-2.5 !rounded-xl overflow-x-auto">
+            <Calendar className="w-4 h-4 text-accent shrink-0" />
+            <span className="text-[10px] font-bold text-muted uppercase tracking-wider shrink-0 hidden sm:inline">Rango:</span>
+            <input
+              type="date"
+              value={rangeFrom}
+              onChange={(e) => setRangeFrom(e.target.value)}
+              className="text-[12px] sm:text-[13px] border-0 bg-transparent focus:outline-none text-foreground font-semibold min-w-0"
+            />
+            <span className="text-muted/40 shrink-0">—</span>
+            <input
+              type="date"
+              value={rangeTo}
+              onChange={(e) => setRangeTo(e.target.value)}
+              className="text-[12px] sm:text-[13px] border-0 bg-transparent focus:outline-none text-foreground font-semibold min-w-0"
+            />
+          </div>
+          <button
+            onClick={handleExportReport}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl text-[11px] font-bold hover:shadow-lg hover:shadow-emerald-500/20 transition-all duration-200"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Exportar Reporte
+          </button>
         </div>
+      </div>
+
+      {/* Global Search Bar */}
+      <div ref={searchContainerRef} className="relative animate-fade-in">
+        <div className="card-base p-3 !rounded-xl">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar paquete por tracking, código, descripción o cliente..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => {
+                if (searchQuery.trim() && searchResults.length > 0) {
+                  setShowSearchResults(true);
+                }
+              }}
+              className="w-full pl-11 pr-10 py-3 text-[13px] border border-card-border rounded-xl bg-background text-foreground focus:ring-2 focus:ring-accent/30 focus:border-accent/30 placeholder:text-muted/50 font-medium"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchResults([]);
+                  setShowSearchResults(false);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-foreground rounded-lg hover:bg-accent/10 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Search Results Dropdown */}
+        {showSearchResults && searchResults.length > 0 && (
+          <div className="absolute z-50 top-full mt-1 left-0 right-0 card-base !rounded-xl shadow-2xl border border-card-border max-h-80 overflow-y-auto">
+            <div className="p-2">
+              <p className="text-[10px] font-bold text-muted uppercase tracking-wider px-3 py-2">
+                {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""} encontrado{searchResults.length !== 1 ? "s" : ""}
+              </p>
+              {searchResults.map((bulto) => {
+                const badge = getStatusBadge(bulto.status);
+                return (
+                  <button
+                    key={bulto.id}
+                    onClick={() => handleSearchResultClick(bulto)}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-accent/[0.06] transition-colors duration-150 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-semibold text-foreground truncate">
+                          {bulto.tracking_id || bulto.barcode || "Sin ID"}
+                        </span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge.classes}`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px] text-muted truncate">
+                          {bulto.clients?.name || "Sin cliente"}
+                        </span>
+                        {bulto.description && (
+                          <>
+                            <span className="text-muted/30">·</span>
+                            <span className="text-[11px] text-muted/70 truncate">
+                              {bulto.description}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-muted font-mono shrink-0">
+                      {formatDate(bulto.entry_date)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {showSearchResults && searchQuery.trim() && searchResults.length === 0 && (
+          <div className="absolute z-50 top-full mt-1 left-0 right-0 card-base !rounded-xl shadow-2xl border border-card-border">
+            <div className="p-6 text-center">
+              <Search className="w-8 h-8 text-muted/30 mx-auto mb-2" />
+              <p className="text-[13px] text-muted font-medium">
+                No se encontraron paquetes para &quot;{searchQuery}&quot;
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top stats row */}
@@ -641,15 +969,23 @@ export default function ControlOperativoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredBultos.length === 0 ? (
+                  {paginatedBultos.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="text-center py-8 text-sm text-muted font-medium">
                         No hay bultos
                       </td>
                     </tr>
                   ) : (
-                    filteredBultos.slice(0, 20).map((bulto) => (
-                      <tr key={bulto.id} className="border-b border-card-border/30 hover:bg-accent/[0.03] transition-colors duration-200">
+                    paginatedBultos.map((bulto) => (
+                      <tr
+                        key={bulto.id}
+                        id={`bulto-row-${bulto.id}`}
+                        className={`border-b border-card-border/30 transition-all duration-500 ${
+                          highlightedBultoId === bulto.id
+                            ? "bg-accent/10 ring-1 ring-accent/30"
+                            : "hover:bg-accent/[0.03]"
+                        }`}
+                      >
                         <td className="py-3.5 pr-4 text-[13px] font-semibold text-foreground">
                           {bulto.clients?.name || "-"}
                         </td>
@@ -692,6 +1028,44 @@ export default function ControlOperativoPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {totalItems > 0 && (
+              <div className="flex items-center justify-between mt-5 pt-4 border-t border-card-border/30">
+                <p className="text-[12px] text-muted font-medium">
+                  Mostrando {startIndex + 1}-{endIndex} de {totalItems} bultos
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safeCurrentPage <= 1}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${
+                      safeCurrentPage <= 1
+                        ? "text-muted/40 cursor-not-allowed"
+                        : "text-muted hover:text-foreground hover:bg-accent/10"
+                    }`}
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Anterior
+                  </button>
+                  <span className="text-[12px] font-semibold text-foreground px-3">
+                    Página {safeCurrentPage} de {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safeCurrentPage >= totalPages}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${
+                      safeCurrentPage >= totalPages
+                        ? "text-muted/40 cursor-not-allowed"
+                        : "text-muted hover:text-foreground hover:bg-accent/10"
+                    }`}
+                  >
+                    Siguiente
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
