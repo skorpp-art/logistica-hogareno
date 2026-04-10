@@ -65,7 +65,9 @@ export default function PapeleraPage() {
   const handleRestore = async (item: DeletedItem) => {
     const supabase = createClient();
     const table = item.type === "client" ? "clients" : "bultos";
-    await supabase.from(table).update({ deleted_at: null }).eq("id", item.id);
+    const updates: Record<string, unknown> = { deleted_at: null };
+    if (item.type === "bulto") updates.status = "stored";
+    await supabase.from(table).update(updates).eq("id", item.id);
     fetchItems();
   };
 
@@ -81,43 +83,43 @@ export default function PapeleraPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Papelera</h1>
-        <span className="px-2 py-1 bg-red-50 text-red-700 text-xs font-bold rounded-full">
+        <h1 className="text-2xl font-bold text-foreground">Papelera</h1>
+        <span className="px-2 py-1 bg-red-500/15 text-red-400 text-xs font-bold rounded-full">
           {items.length}
         </span>
       </div>
 
       {loading ? (
-        <p className="text-gray-400">Cargando...</p>
+        <p className="text-muted">Cargando...</p>
       ) : items.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-          <Trash2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">La papelera está vacía</p>
+        <div className="bg-card rounded-2xl shadow-sm border border-card-border p-12 text-center">
+          <Trash2 className="w-12 h-12 text-muted mx-auto mb-3" />
+          <p className="text-muted">La papelera está vacía</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+        <div className="bg-card rounded-2xl shadow-sm border border-card-border divide-y divide-card-border animate-fade-in">
           {items.map((item) => (
             <div
               key={`${item.type}-${item.id}`}
-              className="flex items-center justify-between px-6 py-4 hover:bg-gray-50"
+              className="flex items-center justify-between px-6 py-4 hover:bg-accent/5 transition-colors duration-200"
             >
               <div>
-                <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-sm font-medium text-foreground">{item.name}</p>
+                <p className="text-xs text-muted">
                   Eliminado: {new Date(item.deleted_at).toLocaleDateString("es-AR")}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleRestore(item)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-all duration-200 font-medium"
                 >
                   <RotateCcw className="w-3 h-3" />
                   Restaurar
                 </button>
                 <button
                   onClick={() => handlePermanentDelete(item)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-all duration-200 font-medium"
                 >
                   <AlertTriangle className="w-3 h-3" />
                   Eliminar

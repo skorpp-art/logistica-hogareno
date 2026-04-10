@@ -19,7 +19,7 @@ import type { Client } from "@/lib/types/database";
 
 export default function ClientesPage() {
   return (
-    <Suspense fallback={<p className="text-gray-400">Cargando...</p>}>
+    <Suspense fallback={<p className="text-muted">Cargando...</p>}>
       <ClientesContent />
     </Suspense>
   );
@@ -56,16 +56,25 @@ function ClientesContent() {
     const supabase = createClient();
     const { data } = await supabase
       .from("clients")
-      .select("*, bultos(count)")
+      .select("*")
       .is("deleted_at", null)
       .order("name");
 
+    // Count active bultos per client (not deleted)
+    const { data: bultoCounts } = await supabase
+      .from("bultos")
+      .select("client_id")
+      .is("deleted_at", null)
+      .in("status", ["stored", "scheduled_return"]);
+
+    const countMap: Record<string, number> = {};
+    (bultoCounts || []).forEach((b: { client_id: string }) => {
+      countMap[b.client_id] = (countMap[b.client_id] || 0) + 1;
+    });
+
     const mapped = (data || []).map((c: Record<string, unknown>) => ({
       ...c,
-      bultos_count:
-        Array.isArray(c.bultos) && c.bultos[0]
-          ? (c.bultos[0] as { count: number }).count
-          : 0,
+      bultos_count: countMap[c.id as string] || 0,
     })) as (Client & { bultos_count: number })[];
 
     setClients(mapped);
@@ -145,16 +154,16 @@ function ClientesContent() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-foreground">
             Clientes Registrados
           </h1>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted">
             Gestión de cuentas y acceso a stock individual
           </p>
         </div>
         <button
           onClick={openNew}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-600/25 transition-all duration-200"
         >
           <Plus className="w-4 h-4" />
           Nuevo Cliente
@@ -163,35 +172,35 @@ function ClientesContent() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
         <input
           type="text"
           placeholder="Buscar por nombre, fantasía o dirección..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl w-full focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="pl-9 pr-4 py-2.5 text-sm border border-card-border rounded-xl w-full bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
         />
       </div>
 
       {/* Cards Grid */}
       {loading ? (
-        <p className="text-gray-400 text-sm">Cargando...</p>
+        <p className="text-muted text-sm">Cargando...</p>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">No se encontraron clientes</p>
+        <div className="bg-card rounded-2xl shadow-sm border border-card-border p-12 text-center">
+          <FileText className="w-12 h-12 text-muted mx-auto mb-3" />
+          <p className="text-muted">No se encontraron clientes</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
           {filtered.map((client) => (
             <div
               key={client.id}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow relative"
+              className="bg-card rounded-2xl border border-card-border shadow-sm p-5 hover:shadow-md transition-shadow relative"
             >
               {/* Top row: icon + actions */}
               <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-gray-400" />
+                <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-muted" />
                 </div>
                 <div className="flex items-center gap-3">
                   {/* Bultos badge */}
@@ -199,7 +208,7 @@ function ClientesContent() {
                     className={`text-xs font-bold px-3 py-1 rounded-full ${
                       client.bultos_count > 0
                         ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-500"
+                        : "bg-accent/10 text-muted"
                     }`}
                   >
                     {client.bultos_count}{" "}
@@ -207,13 +216,13 @@ function ClientesContent() {
                   </span>
                   <button
                     onClick={() => openEdit(client)}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    className="p-1.5 text-muted hover:text-blue-600 transition-all duration-200"
                   >
                     <Edit className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(client.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+                    className="p-1.5 text-muted hover:text-red-600 transition-all duration-200"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -221,16 +230,16 @@ function ClientesContent() {
               </div>
 
               {/* Client info */}
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
                 {client.name}
               </h3>
               {client.nombre_fantasia && (
-                <p className="text-xs text-gray-500 font-medium mt-0.5 uppercase">
+                <p className="text-xs text-muted font-medium mt-0.5 uppercase">
                   {client.nombre_fantasia}
                 </p>
               )}
               {client.address && (
-                <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-400">
+                <div className="flex items-center gap-1.5 mt-2 text-xs text-muted">
                   <MapPin className="w-3 h-3" />
                   {client.address}
                 </div>
@@ -239,7 +248,7 @@ function ClientesContent() {
               {/* Bottom action */}
               <Link
                 href={`/clientes/${client.id}`}
-                className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors"
+                className="flex items-center justify-between mt-4 pt-3 border-t border-card-border text-xs font-medium text-muted hover:text-blue-600 transition-all duration-200"
               >
                 <div className="flex items-center gap-1.5">
                   <Package className="w-3.5 h-3.5" />
@@ -254,12 +263,12 @@ function ClientesContent() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl shadow-xl w-full max-w-md p-6 animate-scale-in">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gray-700" />
-                <h2 className="text-lg font-bold text-gray-900">
+                <FileText className="w-5 h-5 text-foreground" />
+                <h2 className="text-lg font-bold text-foreground">
                   {editingClient
                     ? "Editar Cliente"
                     : "Ficha de Nuevo Cliente"}
@@ -267,7 +276,7 @@ function ClientesContent() {
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600"
+                className="p-1 text-muted hover:text-foreground transition-all duration-200"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -275,7 +284,7 @@ function ClientesContent() {
 
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
                   Razón Social
                 </label>
                 <input
@@ -284,12 +293,12 @@ function ClientesContent() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Ej: Logística Nacional S.A."
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 border border-card-border rounded-xl text-sm bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
                   Nombre Fantasía
                 </label>
                 <input
@@ -299,12 +308,12 @@ function ClientesContent() {
                     setForm({ ...form, nombre_fantasia: e.target.value })
                   }
                   placeholder="Ej: Tienda Express"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 border border-card-border rounded-xl text-sm bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
                   Domicilio / Planta
                 </label>
                 <input
@@ -314,13 +323,13 @@ function ClientesContent() {
                     setForm({ ...form, address: e.target.value })
                   }
                   placeholder="Calle, Número, Localidad"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2.5 border border-card-border rounded-xl text-sm bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
                     Teléfono
                   </label>
                   <input
@@ -330,11 +339,11 @@ function ClientesContent() {
                       setForm({ ...form, phone: e.target.value })
                     }
                     placeholder="Teléfono"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2.5 border border-card-border rounded-xl text-sm bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
                     Email
                   </label>
                   <input
@@ -344,7 +353,7 @@ function ClientesContent() {
                       setForm({ ...form, email: e.target.value })
                     }
                     placeholder="Email"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2.5 border border-card-border rounded-xl text-sm bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
                   />
                 </div>
               </div>
@@ -353,14 +362,14 @@ function ClientesContent() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+                  className="flex-1 py-2.5 text-sm font-medium text-muted hover:text-foreground transition-all duration-200"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                  className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-all duration-200"
                 >
                   {saving
                     ? "Guardando..."

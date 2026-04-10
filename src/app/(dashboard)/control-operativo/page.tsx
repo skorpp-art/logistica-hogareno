@@ -7,7 +7,6 @@ import {
   TrendingUp,
   Calendar,
   AlertTriangle,
-  ArrowRight,
   Plus,
   Trash2,
   BarChart3,
@@ -37,7 +36,6 @@ interface DateActivity {
 }
 
 export default function ControlOperativoPage() {
-  // Date range
   const [rangeFrom, setRangeFrom] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -49,12 +47,10 @@ export default function ControlOperativoPage() {
     return d.toISOString().split("T")[0];
   });
 
-  // Data
   const [allBultos, setAllBultos] = useState<BultoRow[]>([]);
   const [clients, setClients] = useState<Pick<Client, "id" | "name">[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Form for new bulto
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     client_id: "",
@@ -63,7 +59,6 @@ export default function ControlOperativoPage() {
     scheduled_return_date: "",
   });
 
-  // Tab for bottom section
   const [activeTab, setActiveTab] = useState<"bultos" | "metrics">("metrics");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -91,7 +86,6 @@ export default function ControlOperativoPage() {
     setLoading(false);
   };
 
-  // ---- Computed metrics ----
   const metrics = useMemo(() => {
     const inRange = allBultos.filter((b) => {
       const returnDate = b.actual_return_date || b.scheduled_return_date;
@@ -103,10 +97,8 @@ export default function ControlOperativoPage() {
       (b) => b.status === "returned" && b.actual_return_date
     );
 
-    // Total devoluciones en el período
     const totalReturns = returned.length;
 
-    // Promedio por día laboral (lun-vie)
     const from = new Date(rangeFrom);
     const to = new Date(rangeTo);
     let workDays = 0;
@@ -118,7 +110,6 @@ export default function ControlOperativoPage() {
     }
     const avgPerDay = workDays > 0 ? (totalReturns / workDays).toFixed(1) : "0";
 
-    // Día pico
     const returnsByDate: Record<string, number> = {};
     returned.forEach((b) => {
       const d = b.actual_return_date!;
@@ -133,13 +124,11 @@ export default function ControlOperativoPage() {
       }
     });
 
-    // Fechas con mayor actividad (top 7)
     const activityDates: DateActivity[] = Object.entries(returnsByDate)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 7)
       .map(([date, count]) => ({ date, count }));
 
-    // Stock actual por cliente
     const activeBultos = allBultos.filter(
       (b) => b.deleted_at === null && b.status === "stored"
     );
@@ -153,12 +142,10 @@ export default function ControlOperativoPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    // Alertas de stock crítico (>10 paquetes por cliente)
     const criticalClients = Object.values(byClient).filter(
       (c) => c.count > 10
     );
 
-    // Stock antiguo (>30 días)
     const today = new Date();
     const oldStock = activeBultos.filter((b) => {
       const entry = new Date(b.entry_date);
@@ -168,7 +155,6 @@ export default function ControlOperativoPage() {
       return diffDays > 7;
     });
 
-    // Tiempo promedio de almacenamiento
     const avgStorageDays =
       activeBultos.length > 0
         ? Math.round(
@@ -184,7 +170,6 @@ export default function ControlOperativoPage() {
           )
         : 0;
 
-    // Eficiencia: devoluciones a tiempo vs tarde
     const onTime = returned.filter((b) => {
       if (!b.scheduled_return_date || !b.actual_return_date) return false;
       return b.actual_return_date <= b.scheduled_return_date;
@@ -208,7 +193,6 @@ export default function ControlOperativoPage() {
     };
   }, [allBultos, rangeFrom, rangeTo]);
 
-  // ---- Actions ----
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
@@ -258,7 +242,6 @@ export default function ControlOperativoPage() {
     fetchData();
   };
 
-  // Max for bar chart
   const maxActivity = Math.max(
     ...metrics.activityDates.map((d) => d.count),
     1
@@ -274,7 +257,6 @@ export default function ControlOperativoPage() {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
-  // Filtered bultos for table
   const filteredBultos = allBultos.filter((b) => {
     if (b.deleted_at !== null) return false;
     if (filterStatus === "all") return b.status !== "returned";
@@ -284,7 +266,10 @@ export default function ControlOperativoPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-gray-400 text-sm">Cargando métricas...</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+          <p className="text-muted text-sm font-medium">Cargando métricas...</p>
+        </div>
       </div>
     );
   }
@@ -292,148 +277,93 @@ export default function ControlOperativoPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center">
+      <div className="flex items-center justify-between flex-wrap gap-4 animate-fade-in">
+        <div className="flex items-center gap-4">
+          <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/15">
             <Activity className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">
-              Panel de Control Operativo
+            <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
+              Control Operativo
             </h1>
-            <p className="text-xs text-gray-400 uppercase tracking-wider">
+            <p className="text-xs text-muted font-medium tracking-wide">
               Métricas de rendimiento y alertas
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          <span className="text-xs font-bold text-gray-500 uppercase">Rango:</span>
+        <div className="flex items-center gap-2 card-base px-3 sm:px-4 py-2.5 !rounded-xl overflow-x-auto">
+          <Calendar className="w-4 h-4 text-accent shrink-0" />
+          <span className="text-[10px] font-bold text-muted uppercase tracking-wider shrink-0 hidden sm:inline">Rango:</span>
           <input
             type="date"
             value={rangeFrom}
             onChange={(e) => setRangeFrom(e.target.value)}
-            className="text-sm border-0 bg-transparent focus:outline-none text-gray-700 font-medium"
+            className="text-[12px] sm:text-[13px] border-0 bg-transparent focus:outline-none text-foreground font-semibold min-w-0"
           />
-          <span className="text-gray-300">—</span>
+          <span className="text-muted/40 shrink-0">—</span>
           <input
             type="date"
             value={rangeTo}
             onChange={(e) => setRangeTo(e.target.value)}
-            className="text-sm border-0 bg-transparent focus:outline-none text-gray-700 font-medium"
+            className="text-[12px] sm:text-[13px] border-0 bg-transparent focus:outline-none text-foreground font-semibold min-w-0"
           />
         </div>
       </div>
 
       {/* Top stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
-              <Package className="w-5 h-5 text-blue-600" />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 stagger-children">
+        {[
+          { icon: Package, label: "Total período", value: metrics.totalReturns, sub: "Documentos Generados", gradient: "stat-blue", iconColor: "text-blue-400", iconBg: "bg-blue-500/10" },
+          { icon: TrendingUp, label: "Promedio / Salida", value: metrics.avgPerDay, sub: "Por Día Laboral", gradient: "stat-green", iconColor: "text-emerald-400", iconBg: "bg-emerald-500/10" },
+          { icon: Calendar, label: "Día pico", value: formatDate(metrics.peakDate), sub: `${metrics.peakCount} devoluciones`, gradient: "stat-purple", iconColor: "text-purple-400", iconBg: "bg-purple-500/10" },
+          { icon: Clock, label: "Tiempo promedio", value: metrics.avgStorageDays, sub: "Días almacenamiento", gradient: "stat-amber", iconColor: "text-amber-400", iconBg: "bg-amber-500/10" },
+          { icon: AlertTriangle, label: "Stock antiguo", value: metrics.oldStock, sub: "Bultos >7 días", gradient: "stat-red", iconColor: "text-red-400", iconBg: "bg-red-500/10" },
+        ].map((stat) => (
+          <div key={stat.label} className={`card-base p-5 animate-fade-in ${stat.gradient}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className={`w-10 h-10 ${stat.iconBg} rounded-xl flex items-center justify-center`}>
+                <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+              </div>
+              <span className="text-[9px] font-bold text-muted uppercase tracking-[0.1em]">
+                {stat.label}
+              </span>
             </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Total período
-            </span>
+            <p className="text-3xl font-extrabold text-foreground tracking-tight">{stat.value}</p>
+            <p className="text-[11px] text-muted mt-1 font-medium">{stat.sub}</p>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{metrics.totalReturns}</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Documentos de Devolución Generados
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-green-600" />
-            </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Promedio / Salida
-            </span>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{metrics.avgPerDay}</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Promedio por Día Laboral (Lun-Vie)
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 bg-purple-50 rounded-lg flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-purple-600" />
-            </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Día pico
-            </span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">
-            {formatDate(metrics.peakDate)}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {metrics.peakCount} devoluciones
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center">
-              <Clock className="w-5 h-5 text-amber-600" />
-            </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Tiempo promedio
-            </span>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">
-            {metrics.avgStorageDays}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            Días de almacenamiento promedio
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-9 h-9 bg-red-50 rounded-lg flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-            </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Stock antiguo
-            </span>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{metrics.oldStock}</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Bultos con más de 7 días
-          </p>
-        </div>
+        ))}
       </div>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Fechas con mayor actividad */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <BarChart3 className="w-5 h-5 text-gray-700" />
-            <h2 className="text-sm font-bold text-gray-900">
+        <div className="card-base p-6 animate-fade-in">
+          <div className="flex items-center gap-2.5 mb-6">
+            <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 text-blue-400" />
+            </div>
+            <h2 className="text-[13px] font-bold text-foreground">
               Fechas con Mayor Actividad
             </h2>
           </div>
           {metrics.activityDates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-              <BarChart3 className="w-10 h-10 mb-2 opacity-30" />
-              <p className="text-sm">Sin datos en este período</p>
+            <div className="flex flex-col items-center justify-center py-10 text-muted">
+              <BarChart3 className="w-10 h-10 mb-3 opacity-20" />
+              <p className="text-sm font-medium">Sin datos en este período</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {metrics.activityDates.map((item) => (
-                <div key={item.date} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500 w-20 font-mono">
+              {metrics.activityDates.map((item, i) => (
+                <div key={item.date} className="flex items-center gap-3 group">
+                  <span className="text-[11px] text-muted w-20 font-mono font-medium">
                     {formatDate(item.date)}
                   </span>
-                  <div className="flex-1 h-7 bg-gray-100 rounded-md overflow-hidden">
+                  <div className="flex-1 h-8 bg-accent/[0.06] rounded-lg overflow-hidden">
                     <div
-                      className="h-full bg-blue-500 rounded-md flex items-center justify-end pr-2 transition-all duration-500"
+                      className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-lg flex items-center justify-end pr-3 animate-bar-grow"
                       style={{
-                        width: `${Math.max((item.count / maxActivity) * 100, 8)}%`,
+                        width: `${Math.max((item.count / maxActivity) * 100, 12)}%`,
+                        animationDelay: `${i * 100}ms`,
                       }}
                     >
                       <span className="text-[10px] font-bold text-white">
@@ -448,40 +378,42 @@ export default function ControlOperativoPage() {
         </div>
 
         {/* Alertas de stock crítico */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <AlertTriangle className="w-5 h-5 text-gray-700" />
-            <h2 className="text-sm font-bold text-gray-900">
-              Alertas de Stock Crítico (&gt;10 Paquetes)
+        <div className="card-base p-6 animate-fade-in">
+          <div className="flex items-center gap-2.5 mb-6">
+            <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+            </div>
+            <h2 className="text-[13px] font-bold text-foreground">
+              Stock Crítico (&gt;10 Paquetes)
             </h2>
           </div>
           {metrics.criticalClients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-3">
-                <Package className="w-8 h-8 text-green-400" />
+            <div className="flex flex-col items-center justify-center py-10">
+              <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-3">
+                <Package className="w-8 h-8 text-emerald-400" />
               </div>
-              <p className="text-sm font-medium text-gray-500">Todo bajo control</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Ningún cliente supera el límite de alerta.
+              <p className="text-sm font-semibold text-foreground">Todo bajo control</p>
+              <p className="text-[11px] text-muted mt-1">
+                Ningún cliente supera el límite de alerta
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {metrics.criticalClients
                 .sort((a, b) => b.count - a.count)
                 .map((client) => (
                   <div
                     key={client.name}
-                    className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100"
+                    className="flex items-center justify-between p-3.5 bg-red-500/[0.06] rounded-xl border border-red-500/10"
                   >
                     <div className="flex items-center gap-3">
-                      <AlertTriangle className="w-4 h-4 text-red-500" />
-                      <span className="text-sm font-medium text-gray-900">
+                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                      <span className="text-[13px] font-semibold text-foreground">
                         {client.name}
                       </span>
                     </div>
-                    <span className="text-sm font-bold text-red-600">
-                      {client.count} bultos
+                    <span className="text-[13px] font-bold text-red-400">
+                      {client.count}
                     </span>
                   </div>
                 ))}
@@ -492,33 +424,32 @@ export default function ControlOperativoPage() {
 
       {/* Distribution + Efficiency row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Distribución por cliente */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <Users className="w-5 h-5 text-gray-700" />
-            <h2 className="text-sm font-bold text-gray-900">
-              Distribución de Stock por Cliente
+        <div className="card-base p-6 animate-fade-in">
+          <div className="flex items-center gap-2.5 mb-6">
+            <div className="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center">
+              <Users className="w-4 h-4 text-indigo-400" />
+            </div>
+            <h2 className="text-[13px] font-bold text-foreground">
+              Distribución por Cliente
             </h2>
           </div>
           {metrics.clientDistribution.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">
+            <p className="text-sm text-muted text-center py-10 font-medium">
               Sin stock almacenado
             </p>
           ) : (
-            <div className="space-y-2">
-              {metrics.clientDistribution.map((client) => (
+            <div className="space-y-3">
+              {metrics.clientDistribution.map((client, i) => (
                 <div key={client.name} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-600 w-28 truncate font-medium">
+                  <span className="text-[11px] text-muted w-28 truncate font-semibold">
                     {client.name}
                   </span>
-                  <div className="flex-1 h-6 bg-gray-100 rounded overflow-hidden">
+                  <div className="flex-1 h-7 bg-accent/[0.06] rounded-lg overflow-hidden">
                     <div
-                      className="h-full bg-indigo-400 rounded flex items-center justify-end pr-2 transition-all duration-500"
+                      className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-lg flex items-center justify-end pr-2.5 animate-bar-grow"
                       style={{
-                        width: `${Math.max(
-                          (client.count / maxClient) * 100,
-                          10
-                        )}%`,
+                        width: `${Math.max((client.count / maxClient) * 100, 12)}%`,
+                        animationDelay: `${i * 80}ms`,
                       }}
                     >
                       <span className="text-[10px] font-bold text-white">
@@ -532,56 +463,45 @@ export default function ControlOperativoPage() {
           )}
         </div>
 
-        {/* Eficiencia de devoluciones */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <TrendingUp className="w-5 h-5 text-gray-700" />
-            <h2 className="text-sm font-bold text-gray-900">
+        <div className="card-base p-6 animate-fade-in">
+          <div className="flex items-center gap-2.5 mb-6">
+            <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h2 className="text-[13px] font-bold text-foreground">
               Resumen de Operaciones
             </h2>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-blue-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-blue-700">
-                {metrics.activeBultos}
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Bultos almacenados
-              </p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">
-                {metrics.totalReturns}
-              </p>
-              <p className="text-xs text-green-600 mt-1">
-                Devueltos (período)
-              </p>
-            </div>
-            <div className="bg-amber-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-amber-700">
-                {metrics.onTime}
-              </p>
-              <p className="text-xs text-amber-600 mt-1">A tiempo</p>
-            </div>
-            <div className="bg-red-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-red-700">{metrics.late}</p>
-              <p className="text-xs text-red-600 mt-1">Con demora</p>
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: metrics.activeBultos, label: "Almacenados", color: "blue" },
+              { value: metrics.totalReturns, label: "Devueltos", color: "emerald" },
+              { value: metrics.onTime, label: "A tiempo", color: "amber" },
+              { value: metrics.late, label: "Con demora", color: "red" },
+            ].map((item) => (
+              <div key={item.label} className={`bg-${item.color}-500/[0.06] rounded-xl p-4 text-center`}>
+                <p className={`text-2xl font-extrabold text-${item.color}-400 tracking-tight`}>
+                  {item.value}
+                </p>
+                <p className={`text-[10px] text-${item.color}-400/70 mt-1 font-semibold uppercase tracking-wider`}>
+                  {item.label}
+                </p>
+              </div>
+            ))}
           </div>
           {metrics.totalReturns > 0 && (
-            <div className="mt-4">
-              <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <div className="mt-5">
+              <div className="flex justify-between text-[11px] text-muted mb-2 font-semibold">
                 <span>Tasa de puntualidad</span>
-                <span className="font-bold">
+                <span className="text-foreground">
                   {Math.round(
                     (metrics.onTime / Math.max(metrics.totalReturns, 1)) * 100
-                  )}
-                  %
+                  )}%
                 </span>
               </div>
-              <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+              <div className="w-full h-2.5 bg-accent/[0.06] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-500"
+                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full animate-bar-grow"
                   style={{
                     width: `${(metrics.onTime / Math.max(metrics.totalReturns, 1)) * 100}%`,
                   }}
@@ -592,58 +512,48 @@ export default function ControlOperativoPage() {
         </div>
       </div>
 
-      {/* Tabs: Metrics / Bultos table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="flex border-b border-gray-100">
-          <button
-            onClick={() => setActiveTab("metrics")}
-            className={`px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === "metrics"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Métricas
-          </button>
-          <button
-            onClick={() => setActiveTab("bultos")}
-            className={`px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === "bultos"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Gestión de Bultos
-          </button>
+      {/* Tabs */}
+      <div className="card-base overflow-hidden animate-fade-in">
+        <div className="flex border-b border-card-border">
+          {["metrics", "bultos"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab as "metrics" | "bultos")}
+              className={`px-6 py-3.5 text-[13px] font-semibold transition-all duration-200 relative ${
+                activeTab === tab
+                  ? "text-accent"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {tab === "metrics" ? "Métricas" : "Gestión de Bultos"}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-accent to-accent-light" />
+              )}
+            </button>
+          ))}
         </div>
 
         {activeTab === "metrics" ? (
           <div className="p-6">
-            <h3 className="text-sm font-bold text-gray-700 mb-4">
-              Indicadores clave del período {formatDate(rangeFrom)} — {formatDate(rangeTo)}
+            <h3 className="text-[13px] font-bold text-foreground mb-4">
+              Indicadores clave — {formatDate(rangeFrom)} a {formatDate(rangeTo)}
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div className="p-4 border border-gray-100 rounded-lg">
-                <p className="text-lg font-bold text-gray-900">{metrics.totalBultos}</p>
-                <p className="text-xs text-gray-400">Total bultos activos</p>
-              </div>
-              <div className="p-4 border border-gray-100 rounded-lg">
-                <p className="text-lg font-bold text-gray-900">{metrics.activeBultos}</p>
-                <p className="text-xs text-gray-400">Actualmente almacenados</p>
-              </div>
-              <div className="p-4 border border-gray-100 rounded-lg">
-                <p className="text-lg font-bold text-gray-900">{metrics.avgStorageDays}d</p>
-                <p className="text-xs text-gray-400">Promedio almacenamiento</p>
-              </div>
-              <div className="p-4 border border-gray-100 rounded-lg">
-                <p className="text-lg font-bold text-gray-900">{metrics.oldStock}</p>
-                <p className="text-xs text-gray-400">Stock &gt;7 días</p>
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+              {[
+                { value: metrics.totalBultos, label: "Total activos" },
+                { value: metrics.activeBultos, label: "Almacenados" },
+                { value: `${metrics.avgStorageDays}d`, label: "Promedio" },
+                { value: metrics.oldStock, label: "Stock >7d" },
+              ].map((item) => (
+                <div key={item.label} className="p-4 border border-card-border rounded-xl">
+                  <p className="text-xl font-extrabold text-foreground tracking-tight">{item.value}</p>
+                  <p className="text-[10px] text-muted font-semibold uppercase tracking-wider mt-1">{item.label}</p>
+                </div>
+              ))}
             </div>
           </div>
         ) : (
           <div className="p-6">
-            {/* Add button + filters */}
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <div className="flex gap-2">
                 {[
@@ -654,10 +564,10 @@ export default function ControlOperativoPage() {
                   <button
                     key={f.key}
                     onClick={() => setFilterStatus(f.key)}
-                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                    className={`px-4 py-2 text-[11px] rounded-lg font-bold transition-all duration-200 tracking-wide ${
                       filterStatus === f.key
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        ? "bg-accent text-white shadow-md shadow-accent/20"
+                        : "bg-accent/[0.06] text-muted hover:bg-accent/10"
                     }`}
                   >
                     {f.label}
@@ -666,21 +576,21 @@ export default function ControlOperativoPage() {
               </div>
               <button
                 onClick={() => setShowForm(!showForm)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl text-[11px] font-bold hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5" />
                 Nuevo Bulto
               </button>
             </div>
 
             {showForm && (
-              <form onSubmit={handleAdd} className="mb-4 p-4 bg-gray-50 rounded-lg space-y-3">
+              <form onSubmit={handleAdd} className="mb-5 p-5 bg-background/50 rounded-xl border border-card-border space-y-3 animate-scale-in">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <select
                     required
                     value={form.client_id}
                     onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="px-3 py-2.5 border border-card-border rounded-xl text-[13px] bg-card text-foreground font-medium"
                   >
                     <option value="">Cliente *</option>
                     {clients.map((c) => (
@@ -692,90 +602,87 @@ export default function ControlOperativoPage() {
                     placeholder="Descripción"
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="px-3 py-2.5 border border-card-border rounded-xl text-[13px] bg-card text-foreground"
                   />
                   <input
                     type="text"
                     placeholder="Código de barras"
                     value={form.barcode}
                     onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="px-3 py-2.5 border border-card-border rounded-xl text-[13px] bg-card text-foreground"
                   />
                   <input
                     type="date"
-                    placeholder="Fecha retorno"
                     value={form.scheduled_return_date}
                     onChange={(e) => setForm({ ...form, scheduled_return_date: e.target.value })}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="px-3 py-2.5 border border-card-border rounded-xl text-[13px] bg-card text-foreground"
                   />
                 </div>
                 <div className="flex gap-2">
-                  <button type="submit" className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700">
+                  <button type="submit" className="px-5 py-2 bg-accent text-white rounded-xl text-[11px] font-bold hover:bg-accent/90">
                     Agregar
                   </button>
-                  <button type="button" onClick={() => setShowForm(false)} className="px-4 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50">
+                  <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2 text-muted rounded-xl text-[11px] font-semibold hover:bg-accent/5">
                     Cancelar
                   </button>
                 </div>
               </form>
             )}
 
-            {/* Bultos table */}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left text-xs font-bold text-gray-500 uppercase pb-2 pr-4">Cliente</th>
-                    <th className="text-left text-xs font-bold text-gray-500 uppercase pb-2 pr-4">Descripción</th>
-                    <th className="text-left text-xs font-bold text-gray-500 uppercase pb-2 pr-4">Código</th>
-                    <th className="text-left text-xs font-bold text-gray-500 uppercase pb-2 pr-4">Ingreso</th>
-                    <th className="text-center text-xs font-bold text-gray-500 uppercase pb-2 pr-4">Estado</th>
-                    <th className="text-center text-xs font-bold text-gray-500 uppercase pb-2">Acciones</th>
+                  <tr className="border-b border-card-border">
+                    {["Cliente", "Descripción", "Código", "Ingreso", "Estado", "Acciones"].map((h) => (
+                      <th key={h} className={`text-${h === "Estado" || h === "Acciones" ? "center" : "left"} text-[10px] font-bold text-muted uppercase tracking-wider pb-3 pr-4`}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredBultos.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-6 text-sm text-gray-400">
+                      <td colSpan={6} className="text-center py-8 text-sm text-muted font-medium">
                         No hay bultos
                       </td>
                     </tr>
                   ) : (
                     filteredBultos.slice(0, 20).map((bulto) => (
-                      <tr key={bulto.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-3 pr-4 text-sm font-medium text-gray-900">
+                      <tr key={bulto.id} className="border-b border-card-border/30 hover:bg-accent/[0.03] transition-colors duration-200">
+                        <td className="py-3.5 pr-4 text-[13px] font-semibold text-foreground">
                           {bulto.clients?.name || "-"}
                         </td>
-                        <td className="py-3 pr-4 text-sm text-gray-600">
+                        <td className="py-3.5 pr-4 text-[13px] text-muted">
                           {bulto.description || "-"}
                         </td>
-                        <td className="py-3 pr-4 text-sm text-gray-600 font-mono">
+                        <td className="py-3.5 pr-4 text-[13px] text-muted font-mono">
                           {bulto.barcode || "-"}
                         </td>
-                        <td className="py-3 pr-4 text-sm text-gray-600">
+                        <td className="py-3.5 pr-4 text-[13px] text-muted">
                           {formatDate(bulto.entry_date)}
                         </td>
-                        <td className="py-3 pr-4 text-center">
-                          <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                        <td className="py-3.5 pr-4 text-center">
+                          <span className={`text-[10px] font-bold px-3 py-1.5 rounded-full ${
                             bulto.status === "stored"
-                              ? "bg-green-50 text-green-700"
-                              : "bg-amber-50 text-amber-700"
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : "bg-amber-500/10 text-amber-400"
                           }`}>
                             {bulto.status === "stored" ? "Almacenado" : "Retorno prog."}
                           </span>
                         </td>
-                        <td className="py-3">
+                        <td className="py-3.5">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => handleMarkReturned(bulto.id)} className="px-2 py-1 text-[10px] bg-green-50 text-green-700 rounded hover:bg-green-100 font-medium">
+                            <button onClick={() => handleMarkReturned(bulto.id)} className="px-2.5 py-1.5 text-[10px] bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 font-bold transition-colors">
                               Devolver
                             </button>
                             {bulto.status === "stored" && (
-                              <button onClick={() => handleScheduleReturn(bulto.id)} className="p-1 text-gray-400 hover:text-blue-600">
-                                <Calendar className="w-3 h-3" />
+                              <button onClick={() => handleScheduleReturn(bulto.id)} className="p-1.5 text-muted hover:text-accent rounded-lg hover:bg-accent/10 transition-all">
+                                <Calendar className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            <button onClick={() => handleDelete(bulto.id)} className="p-1 text-gray-400 hover:text-red-600">
-                              <Trash2 className="w-3 h-3" />
+                            <button onClick={() => handleDelete(bulto.id)} className="p-1.5 text-muted hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all">
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>

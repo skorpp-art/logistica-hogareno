@@ -6,6 +6,7 @@ interface StatsCardProps {
   icon: LucideIcon;
   iconColor: string;
   iconBg: string;
+  gradient?: string;
 }
 
 export default function StatsCard({
@@ -14,17 +15,18 @@ export default function StatsCard({
   icon: Icon,
   iconColor,
   iconBg,
+  gradient,
 }: StatsCardProps) {
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm flex items-center justify-between">
-      <div>
-        <p className="text-xs font-bold tracking-wider text-gray-500 uppercase">
+    <div className={`card-base p-6 flex items-center justify-between group animate-fade-in relative overflow-hidden ${gradient || ''}`}>
+      <div className="relative z-10">
+        <p className="text-[11px] font-bold tracking-[0.12em] text-muted uppercase">
           {label}
         </p>
-        <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+        <p className="text-4xl font-extrabold text-foreground mt-2 animate-count tracking-tight">{value}</p>
       </div>
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${iconBg}`}>
-        <Icon className={`w-6 h-6 ${iconColor}`} />
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${iconBg} transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg relative z-10`}>
+        <Icon className={`w-7 h-7 ${iconColor}`} />
       </div>
     </div>
   );

@@ -47,6 +47,21 @@ export interface StockAlert {
   created_at: string;
 }
 
+export interface WeeklySchedule {
+  id: string;
+  client_id: string;
+  dom: boolean;
+  lun: boolean;
+  mar: boolean;
+  mie: boolean;
+  jue: boolean;
+  vie: boolean;
+  sab: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DashboardStats {
   total_stock: number;
   total_clients: number;

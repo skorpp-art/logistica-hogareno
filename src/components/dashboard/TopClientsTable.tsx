@@ -8,72 +8,59 @@ interface TopClientsTableProps {
 
 export default function TopClientsTable({ clients }: TopClientsTableProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <TrendingUp className="w-5 h-5 text-blue-500" />
-        <h2 className="text-xs font-bold tracking-wider text-gray-700 uppercase">
-          Top 5 Clientes (Mayor Volumen)
+    <div className="card-base p-6 animate-fade-in">
+      <div className="flex items-center gap-2.5 mb-6">
+        <div className="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center">
+          <TrendingUp className="w-4 h-4 text-accent" />
+        </div>
+        <h2 className="text-[13px] font-bold tracking-wide text-foreground">
+          Top 5 Clientes
         </h2>
+        <span className="text-[10px] font-semibold text-muted tracking-wider uppercase ml-auto">
+          Mayor Volumen
+        </span>
       </div>
 
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-gray-100">
-            <th className="text-left text-xs font-bold text-gray-500 pb-3 uppercase tracking-wider">
-              Cliente
-            </th>
-            <th className="text-center text-xs font-bold text-gray-500 pb-3 uppercase tracking-wider">
-              Bultos
-            </th>
-            <th className="text-center text-xs font-bold text-gray-500 pb-3 uppercase tracking-wider">
-              Acción
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {clients.map((client, index) => (
-            <tr key={client.id} className="border-b border-gray-50">
-              <td className="py-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-6">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">
-                      {client.name}
-                    </p>
-                    {client.notes && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {client.notes}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </td>
-              <td className="text-center">
-                <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-50 text-blue-700 rounded-full text-sm font-bold">
-                  {client.bultos_count}
-                </span>
-              </td>
-              <td className="text-center">
-                <Link
-                  href={`/clientes/${client.id}`}
-                  className="inline-flex items-center justify-center w-8 h-8 text-gray-400 hover:text-blue-600 transition-colors"
-                >
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </td>
-            </tr>
-          ))}
-          {clients.length === 0 && (
-            <tr>
-              <td colSpan={3} className="text-center py-8 text-sm text-gray-400">
-                No hay clientes con bultos almacenados
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      <div className="space-y-1">
+        {clients.map((client, index) => (
+          <div
+            key={client.id}
+            className="flex items-center gap-4 px-3 py-3.5 rounded-xl hover:bg-accent/[0.04] transition-all duration-200 group"
+          >
+            <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold text-white ${
+              index === 0 ? "bg-gradient-to-br from-blue-500 to-blue-700" :
+              index === 1 ? "bg-gradient-to-br from-blue-400 to-blue-600" :
+              "bg-gradient-to-br from-slate-400 to-slate-600"
+            }`}>
+              {index + 1}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground truncate">
+                {client.name}
+              </p>
+              {client.notes && (
+                <p className="text-[11px] text-muted mt-0.5 truncate">
+                  {client.notes}
+                </p>
+              )}
+            </div>
+            <span className="inline-flex items-center justify-center min-w-[36px] h-8 bg-accent/10 text-accent rounded-lg text-[13px] font-bold px-2">
+              {client.bultos_count}
+            </span>
+            <Link
+              href={`/clientes/${client.id}`}
+              className="w-8 h-8 flex items-center justify-center text-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100"
+            >
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        ))}
+        {clients.length === 0 && (
+          <div className="text-center py-10 text-sm text-muted">
+            No hay clientes con bultos almacenados
+          </div>
+        )}
+      </div>
     </div>
   );
 }
