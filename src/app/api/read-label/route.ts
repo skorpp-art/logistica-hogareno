@@ -16,6 +16,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se recibió imagen" }, { status: 400 });
     }
 
+    // Ensure valid media type for Anthropic API
+    const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    let finalMediaType = mediaType || "image/jpeg";
+    if (!validTypes.includes(finalMediaType)) {
+      finalMediaType = "image/jpeg";
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -24,7 +31,7 @@ export async function POST(req: NextRequest) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-3-5-sonnet-20241022",
         max_tokens: 1024,
         messages: [
           {
@@ -34,7 +41,7 @@ export async function POST(req: NextRequest) {
                 type: "image",
                 source: {
                   type: "base64",
-                  media_type: mediaType || "image/jpeg",
+                  media_type: finalMediaType,
                   data: image,
                 },
               },
@@ -78,9 +85,9 @@ REGLAS IMPORTANTES:
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error("Anthropic API error:", errorData);
+      console.error("Anthropic API error:", response.status, errorData);
       return NextResponse.json(
-        { error: `Error de la API de IA: ${response.status}` },
+        { error: `Error de la API de IA: ${response.status} - ${errorData.substring(0, 200)}` },
         { status: response.status }
       );
     }
