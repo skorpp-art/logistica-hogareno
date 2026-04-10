@@ -148,12 +148,13 @@ export default function DirectorioPage() {
   const handleExport = async () => {
     const XLSX = await import("xlsx");
 
-    const exportData = clients.map((c) => ({
-      Nombre: c.name,
+    const exportData = clients.map((c, i) => ({
+      "N°": i + 1,
       "Nombre Fantasía": c.nombre_fantasia || "",
+      "NOMBRE PRINCIPAL": c.name,
+      "Dirección / Localidad": c.address || "",
       Teléfono: c.phone || "",
       Email: c.email || "",
-      Dirección: c.address || "",
       Notas: c.notes || "",
       "Stock Actual": c.bultos_count,
       "Devoluciones (30d)": c.returns_last_month,
@@ -184,53 +185,80 @@ export default function DirectorioPage() {
     const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
     // Map Excel columns to our fields (flexible mapping)
+    // Supports: "NOMBRE PRINCIPAL", "Nombre Fantasía", "Dirección / Localidad", etc.
     const rows: ImportRow[] = jsonData
       .map((row) => {
+        // Find the name - try many possible column names
         const name =
+          (row["NOMBRE PRINCIPAL"] as string) ||
+          (row["Nombre Principal"] as string) ||
+          (row["nombre principal"] as string) ||
           (row["Nombre"] as string) ||
           (row["nombre"] as string) ||
           (row["Name"] as string) ||
           (row["name"] as string) ||
           (row["NOMBRE"] as string) ||
           (row["Razon Social"] as string) ||
+          (row["RAZON SOCIAL"] as string) ||
           (row["razon_social"] as string) ||
+          (row["Cliente"] as string) ||
+          (row["CLIENTE"] as string) ||
           "";
 
         if (!name.trim()) return null;
+
+        // Skip header rows that got parsed as data
+        const nameLower = name.toLowerCase();
+        if (nameLower === "nombre principal" || nameLower === "nombre" || nameLower === "cliente") return null;
 
         return {
           name: name.trim(),
           nombre_fantasia:
             ((row["Nombre Fantasía"] as string) ||
+            (row["Nombre Fantasia"] as string) ||
+            (row["NOMBRE FANTASIA"] as string) ||
             (row["nombre_fantasia"] as string) ||
+            (row["Nombre fantasía"] as string) ||
             (row["Fantasia"] as string) ||
             (row["fantasia"] as string) ||
+            (row["FANTASIA"] as string) ||
             "") || undefined,
           phone:
-            ((row["Teléfono"] as string) ||
-            (row["telefono"] as string) ||
-            (row["Telefono"] as string) ||
-            (row["Phone"] as string) ||
-            (row["phone"] as string) ||
-            (row["Tel"] as string) ||
-            String(row["Teléfono"] || row["telefono"] || row["Tel"] || "")) || undefined,
+            String(
+              row["Teléfono"] || row["Telefono"] || row["TELEFONO"] ||
+              row["telefono"] || row["Phone"] || row["phone"] ||
+              row["Tel"] || row["TEL"] || row["Cel"] || row["cel"] ||
+              row["Celular"] || row["CELULAR"] || ""
+            ).trim() || undefined,
           email:
             ((row["Email"] as string) ||
             (row["email"] as string) ||
+            (row["EMAIL"] as string) ||
             (row["E-mail"] as string) ||
+            (row["e-mail"] as string) ||
+            (row["Correo"] as string) ||
             (row["correo"] as string) ||
             "") || undefined,
           address:
-            ((row["Dirección"] as string) ||
-            (row["direccion"] as string) ||
+            ((row["Dirección / Localidad"] as string) ||
+            (row["Direccion / Localidad"] as string) ||
+            (row["DIRECCION / LOCALIDAD"] as string) ||
+            (row["Dirección"] as string) ||
             (row["Direccion"] as string) ||
+            (row["direccion"] as string) ||
+            (row["DIRECCION"] as string) ||
             (row["Address"] as string) ||
             (row["Domicilio"] as string) ||
+            (row["DOMICILIO"] as string) ||
+            (row["Localidad"] as string) ||
+            (row["LOCALIDAD"] as string) ||
             "") || undefined,
           notes:
             ((row["Notas"] as string) ||
             (row["notas"] as string) ||
+            (row["NOTAS"] as string) ||
             (row["Observaciones"] as string) ||
+            (row["OBSERVACIONES"] as string) ||
             "") || undefined,
         };
       })
