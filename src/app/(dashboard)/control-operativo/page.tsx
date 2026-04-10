@@ -165,7 +165,7 @@ export default function ControlOperativoPage() {
       const diffDays = Math.floor(
         (today.getTime() - entry.getTime()) / (1000 * 60 * 60 * 24)
       );
-      return diffDays > 30;
+      return diffDays > 7;
     });
 
     // Tiempo promedio de almacenamiento
@@ -402,7 +402,7 @@ export default function ControlOperativoPage() {
           </div>
           <p className="text-3xl font-bold text-gray-900">{metrics.oldStock}</p>
           <p className="text-xs text-gray-400 mt-1">
-            Bultos con más de 30 días
+            Bultos con más de 7 días
           </p>
         </div>
       </div>
@@ -637,7 +637,7 @@ export default function ControlOperativoPage() {
               </div>
               <div className="p-4 border border-gray-100 rounded-lg">
                 <p className="text-lg font-bold text-gray-900">{metrics.oldStock}</p>
-                <p className="text-xs text-gray-400">Stock &gt;30 días</p>
+                <p className="text-xs text-gray-400">Stock &gt;7 días</p>
               </div>
             </div>
           </div>

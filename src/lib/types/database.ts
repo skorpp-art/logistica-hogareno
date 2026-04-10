@@ -1,6 +1,7 @@
 export interface Client {
   id: string;
   name: string;
+  nombre_fantasia: string | null;
   phone: string | null;
   email: string | null;
   address: string | null;
@@ -15,10 +16,13 @@ export interface Bulto {
   client_id: string;
   description: string | null;
   barcode: string | null;
-  status: "stored" | "scheduled_return" | "returned" | "deleted";
+  tracking_id: string | null;
+  status: "stored" | "scheduled_return" | "returned" | "deleted" | "cancelled" | "duplicate";
   entry_date: string;
   scheduled_return_date: string | null;
   actual_return_date: string | null;
+  destination_address: string | null;
+  destination_locality: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
