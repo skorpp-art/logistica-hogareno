@@ -182,84 +182,105 @@ export default function DirectorioPage() {
     const data = await file.arrayBuffer();
     const wb = XLSX.read(data);
     const ws = wb.Sheets[wb.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
-    // Map Excel columns to our fields (flexible mapping)
-    // Supports: "NOMBRE PRINCIPAL", "Nombre Fantasía", "Dirección / Localidad", etc.
+    // Read ALL rows as arrays to handle any header position
+    const allRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+
+    // Find the header row by looking for known column names
+    const knownHeaders = ["nombre principal", "nombre fantasía", "nombre fantasia", "dirección / localidad", "direccion / localidad", "nombre", "cliente", "name", "razon social"];
+    let headerRowIdx = -1;
+    let headers: string[] = [];
+
+    for (let r = 0; r < Math.min(allRows.length, 15); r++) {
+      const row = allRows[r];
+      if (!Array.isArray(row)) continue;
+      const rowStrings = row.map((c) => String(c || "").toLowerCase().trim());
+      const matchCount = rowStrings.filter((s) => knownHeaders.some((h) => s.includes(h))).length;
+      if (matchCount > 0) {
+        headerRowIdx = r;
+        headers = row.map((c) => String(c || "").trim());
+        break;
+      }
+    }
+
+    // Fallback: if no header found, try using first row with 3+ non-empty cells as header
+    if (headerRowIdx === -1) {
+      for (let r = 0; r < Math.min(allRows.length, 10); r++) {
+        const row = allRows[r];
+        if (!Array.isArray(row)) continue;
+        const nonEmpty = row.filter((c) => String(c || "").trim() !== "").length;
+        if (nonEmpty >= 3) {
+          headerRowIdx = r;
+          headers = row.map((c) => String(c || "").trim());
+          break;
+        }
+      }
+    }
+
+    if (headerRowIdx === -1) {
+      setImportPreview([]);
+      setImportResult(null);
+      setShowImportModal(true);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // Build column index map (header name -> column index)
+    const colMap: Record<string, number> = {};
+    headers.forEach((h, i) => { if (h) colMap[h.toLowerCase()] = i; });
+
+    // Helper to find a column by multiple possible names
+    const findCol = (...names: string[]): number => {
+      for (const name of names) {
+        const lower = name.toLowerCase();
+        for (const [key, idx] of Object.entries(colMap)) {
+          if (key === lower || key.includes(lower) || lower.includes(key)) return idx;
+        }
+      }
+      return -1;
+    };
+
+    const nameCol = findCol("nombre principal", "nombre", "name", "cliente", "razon social");
+    const fantasiaCol = findCol("nombre fantasía", "nombre fantasia", "fantasia");
+    const addressCol = findCol("dirección / localidad", "direccion / localidad", "dirección", "direccion", "domicilio", "address", "localidad");
+    const phoneCol = findCol("teléfono", "telefono", "phone", "tel", "celular", "cel");
+    const emailCol = findCol("email", "e-mail", "correo");
+    const notesCol = findCol("notas", "observaciones", "notes");
+
+    // Parse data rows (everything after header)
+    const dataRows = allRows.slice(headerRowIdx + 1);
+
+    const jsonData: Record<string, unknown>[] = dataRows
+      .filter((row) => {
+        if (!Array.isArray(row)) return false;
+        const nameVal = nameCol >= 0 ? String(row[nameCol] || "").trim() : "";
+        return nameVal.length > 0;
+      })
+      .map((row) => {
+        const r = row as unknown[];
+        const obj: Record<string, unknown> = {};
+        if (nameCol >= 0) obj["name"] = String(r[nameCol] || "").trim();
+        if (fantasiaCol >= 0) obj["nombre_fantasia"] = String(r[fantasiaCol] || "").trim();
+        if (addressCol >= 0) obj["address"] = String(r[addressCol] || "").trim();
+        if (phoneCol >= 0) obj["phone"] = String(r[phoneCol] || "").trim();
+        if (emailCol >= 0) obj["email"] = String(r[emailCol] || "").trim();
+        if (notesCol >= 0) obj["notes"] = String(r[notesCol] || "").trim();
+        return obj;
+      });
+
+    // Map parsed data to ImportRow
     const rows: ImportRow[] = jsonData
       .map((row) => {
-        // Find the name - try many possible column names
-        const name =
-          (row["NOMBRE PRINCIPAL"] as string) ||
-          (row["Nombre Principal"] as string) ||
-          (row["nombre principal"] as string) ||
-          (row["Nombre"] as string) ||
-          (row["nombre"] as string) ||
-          (row["Name"] as string) ||
-          (row["name"] as string) ||
-          (row["NOMBRE"] as string) ||
-          (row["Razon Social"] as string) ||
-          (row["RAZON SOCIAL"] as string) ||
-          (row["razon_social"] as string) ||
-          (row["Cliente"] as string) ||
-          (row["CLIENTE"] as string) ||
-          "";
-
-        if (!name.trim()) return null;
-
-        // Skip header rows that got parsed as data
-        const nameLower = name.toLowerCase();
-        if (nameLower === "nombre principal" || nameLower === "nombre" || nameLower === "cliente") return null;
+        const name = String(row["name"] || "").trim();
+        if (!name || name.toLowerCase() === "nombre principal" || name.toLowerCase() === "nombre") return null;
 
         return {
-          name: name.trim(),
-          nombre_fantasia:
-            ((row["Nombre Fantasía"] as string) ||
-            (row["Nombre Fantasia"] as string) ||
-            (row["NOMBRE FANTASIA"] as string) ||
-            (row["nombre_fantasia"] as string) ||
-            (row["Nombre fantasía"] as string) ||
-            (row["Fantasia"] as string) ||
-            (row["fantasia"] as string) ||
-            (row["FANTASIA"] as string) ||
-            "") || undefined,
-          phone:
-            String(
-              row["Teléfono"] || row["Telefono"] || row["TELEFONO"] ||
-              row["telefono"] || row["Phone"] || row["phone"] ||
-              row["Tel"] || row["TEL"] || row["Cel"] || row["cel"] ||
-              row["Celular"] || row["CELULAR"] || ""
-            ).trim() || undefined,
-          email:
-            ((row["Email"] as string) ||
-            (row["email"] as string) ||
-            (row["EMAIL"] as string) ||
-            (row["E-mail"] as string) ||
-            (row["e-mail"] as string) ||
-            (row["Correo"] as string) ||
-            (row["correo"] as string) ||
-            "") || undefined,
-          address:
-            ((row["Dirección / Localidad"] as string) ||
-            (row["Direccion / Localidad"] as string) ||
-            (row["DIRECCION / LOCALIDAD"] as string) ||
-            (row["Dirección"] as string) ||
-            (row["Direccion"] as string) ||
-            (row["direccion"] as string) ||
-            (row["DIRECCION"] as string) ||
-            (row["Address"] as string) ||
-            (row["Domicilio"] as string) ||
-            (row["DOMICILIO"] as string) ||
-            (row["Localidad"] as string) ||
-            (row["LOCALIDAD"] as string) ||
-            "") || undefined,
-          notes:
-            ((row["Notas"] as string) ||
-            (row["notas"] as string) ||
-            (row["NOTAS"] as string) ||
-            (row["Observaciones"] as string) ||
-            (row["OBSERVACIONES"] as string) ||
-            "") || undefined,
+          name,
+          nombre_fantasia: String(row["nombre_fantasia"] || "").trim() || undefined,
+          phone: String(row["phone"] || "").trim() || undefined,
+          email: String(row["email"] || "").trim() || undefined,
+          address: String(row["address"] || "").trim() || undefined,
+          notes: String(row["notes"] || "").trim() || undefined,
         };
       })
       .filter(Boolean) as ImportRow[];
