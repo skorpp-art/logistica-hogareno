@@ -41,6 +41,7 @@ function ClientesContent() {
     email: "",
   });
   const [saving, setSaving] = useState(false);
+  const [filterBy, setFilterBy] = useState<"all" | "with_bultos" | "no_bultos" | "alphabetical">("all");
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -142,18 +143,32 @@ function ClientesContent() {
     fetchClients();
   };
 
-  const filtered = clients.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.nombre_fantasia &&
-        c.nombre_fantasia.toLowerCase().includes(search.toLowerCase())) ||
-      (c.address && c.address.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = clients
+    .filter((c) => {
+      // Text search
+      const q = search.toLowerCase();
+      const matchesSearch =
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        (c.nombre_fantasia && c.nombre_fantasia.toLowerCase().includes(q)) ||
+        (c.address && c.address.toLowerCase().includes(q));
+      if (!matchesSearch) return false;
 
-  // Check if client has stock > 7 days
-  const hasAlert = (c: Client & { bultos_count: number }) => {
-    return c.bultos_count > 0; // we'll check in detail page
-  };
+      // Filter
+      if (filterBy === "with_bultos") return c.bultos_count > 0;
+      if (filterBy === "no_bultos") return c.bultos_count === 0;
+      return true;
+    })
+    .sort((a, b) => {
+      if (filterBy === "with_bultos") {
+        // Sort by most bultos first
+        return b.bultos_count - a.bultos_count;
+      }
+      // Default: alphabetical by nombre_fantasia
+      const nameA = (a.nombre_fantasia || a.name || "").toLowerCase();
+      const nameB = (b.nombre_fantasia || b.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
 
   return (
     <div className="space-y-6">
@@ -176,16 +191,40 @@ function ClientesContent() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-        <input
-          type="text"
-          placeholder="Buscar por nombre, fantasía o dirección..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 pr-4 py-2.5 text-sm border border-card-border rounded-xl w-full bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
-        />
+      {/* Search + Filters */}
+      <div className="space-y-3">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, fantasía o dirección..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-4 py-2.5 text-sm border border-card-border rounded-xl w-full bg-background text-foreground focus:ring-2 focus:ring-accent/40 focus:border-accent/40"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: "all" as const, label: "Todos" },
+            { key: "with_bultos" as const, label: "Con paquetes" },
+            { key: "no_bultos" as const, label: "Sin paquetes" },
+          ].map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilterBy(f.key)}
+              className={`px-4 py-1.5 text-xs font-bold rounded-full transition-all duration-200 ${
+                filterBy === f.key
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                  : "bg-accent/10 text-muted hover:bg-accent/20 hover:text-foreground"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+          <span className="flex items-center text-xs text-muted ml-2">
+            {filtered.length} cliente{filtered.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {/* Cards Grid */}
