@@ -74,8 +74,7 @@ export default function ControlGeneralPage() {
       supabase
         .from("bultos")
         .select("*", { count: "exact", head: true })
-        .is("deleted_at", null)
-        .not("client_id", "is", null),
+        .is("deleted_at", null),
       supabase
         .from("clients")
         .select("*", { count: "exact", head: true })
