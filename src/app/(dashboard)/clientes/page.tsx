@@ -63,12 +63,11 @@ function ClientesContent() {
       .is("deleted_at", null)
       .order("name");
 
-    // Count active bultos per client (not deleted, not returned)
+    // Count active bultos per client (not deleted)
     const { data: bultoCounts } = await supabase
       .from("bultos")
       .select("client_id")
-      .is("deleted_at", null)
-      .not("status", "eq", "returned");
+      .is("deleted_at", null);
 
     const countMap: Record<string, number> = {};
     (bultoCounts || []).forEach((b: { client_id: string }) => {

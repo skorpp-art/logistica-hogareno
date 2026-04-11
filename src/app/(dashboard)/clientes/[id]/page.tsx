@@ -14,7 +14,6 @@ import {
   QrCode,
   MapPin,
   CheckSquare,
-  RotateCcw,
   FileText,
   Calendar,
   Clock,
@@ -45,7 +44,6 @@ const ALL_STATUS_OPTIONS = [
   { value: "stored", label: "ALMACENADO", color: "bg-green-100 text-green-700" },
   { value: "scheduled_return", label: "RETORNO PROG.", color: "bg-amber-100 text-amber-700" },
   ...STATUS_OPTIONS,
-  { value: "returned", label: "DEVUELTO", color: "bg-teal-100 text-teal-700" },
 ];
 
 function ClienteDetailContent() {
@@ -196,9 +194,6 @@ function ClienteDetailContent() {
   const handleStatusChange = async (bultoId: string, newStatus: string) => {
     const supabase = createClient();
     const updates: Record<string, unknown> = { status: newStatus };
-    if (newStatus === "returned") {
-      updates.actual_return_date = new Date().toISOString().split("T")[0];
-    }
     const { error } = await supabase.from("bultos").update(updates).eq("id", bultoId);
     if (error) console.error("Error updating status:", error);
     fetchData();
@@ -231,21 +226,6 @@ function ClienteDetailContent() {
     } else {
       setSelectedIds(new Set(bultos.map((b) => b.id)));
     }
-  };
-
-  const handleBatchReturn = async () => {
-    if (selectedIds.size === 0) return;
-    if (!confirm(`¿Marcar ${selectedIds.size} bulto(s) como devuelto?`)) return;
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("bultos")
-      .update({
-        status: "returned",
-        actual_return_date: new Date().toISOString().split("T")[0],
-      })
-      .in("id", Array.from(selectedIds));
-    if (error) console.error("Error batch returning:", error);
-    fetchData();
   };
 
   const handleBatchDelete = async () => {
@@ -495,7 +475,7 @@ function ClienteDetailContent() {
 
   const handleExportPDF = async () => {
     const activeBultos = bultos.filter(
-      (b) => b.status !== "returned" && b.status !== "cancelled"
+      (b) => b.status !== "cancelled"
     );
     await generatePDF(activeBultos);
   };
@@ -518,14 +498,7 @@ function ClienteDetailContent() {
     const storedBultos = bultos.filter((b) => b.status === "stored");
     const totalStored = storedBultos.length;
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const returnedThisMonth = bultos.filter(
-      (b) =>
-        b.status === "returned" &&
-        b.actual_return_date &&
-        new Date(b.actual_return_date) >= startOfMonth
-    ).length;
+    const totalBultos = bultos.length;
 
     const daysArray = storedBultos.map((b) => getDaysStored(b.entry_date));
     const avgDays =
@@ -534,7 +507,7 @@ function ClienteDetailContent() {
         : 0;
     const oldestDays = daysArray.length > 0 ? Math.max(...daysArray) : 0;
 
-    return { totalStored, returnedThisMonth, avgDays, oldestDays };
+    return { totalStored, totalBultos, avgDays, oldestDays };
   }, [bultos]);
 
   if (loading) {
@@ -546,7 +519,7 @@ function ClienteDetailContent() {
   }
 
   const activeBultos = bultos.filter(
-    (b) => b.status !== "returned" && b.status !== "cancelled"
+    (b) => b.status !== "cancelled"
   );
 
   const mapsUrl = client.address
@@ -629,10 +602,10 @@ function ClienteDetailContent() {
         </div>
         <div className="bg-background rounded-xl p-4 border border-card-border">
           <div className="flex items-center gap-2 text-muted mb-1">
-            <RotateCcw className="w-4 h-4" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Devueltos (mes)</span>
+            <Package className="w-4 h-4" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Total bultos</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">{stats.returnedThisMonth}</p>
+          <p className="text-2xl font-bold text-foreground">{stats.totalBultos}</p>
         </div>
         <div className="bg-background rounded-xl p-4 border border-card-border">
           <div className="flex items-center gap-2 text-muted mb-1">
@@ -974,13 +947,6 @@ function ClienteDetailContent() {
             {selectedIds.size} seleccionado{selectedIds.size > 1 ? "s" : ""}
           </span>
           <div className="w-px h-6 bg-card-border" />
-          <button
-            onClick={handleBatchReturn}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Marcar devuelto ({selectedIds.size})
-          </button>
           <button
             onClick={handleBatchDelete}
             className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all"
