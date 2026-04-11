@@ -17,7 +17,7 @@ export interface Bulto {
   description: string | null;
   barcode: string | null;
   tracking_id: string | null;
-  status: "stored" | "scheduled_return" | "returned" | "deleted" | "cancelled" | "duplicate";
+  status: "stored" | "scheduled_return" | "returned" | "deleted" | "cancelled" | "duplicate" | "cambio" | "devolucion" | "rechazado" | "ficha";
   entry_date: string;
   scheduled_return_date: string | null;
   actual_return_date: string | null;

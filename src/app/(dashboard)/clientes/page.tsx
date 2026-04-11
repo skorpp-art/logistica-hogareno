@@ -60,12 +60,11 @@ function ClientesContent() {
       .is("deleted_at", null)
       .order("name");
 
-    // Count active bultos per client (not deleted)
+    // Count ALL active bultos per client (not deleted, not returned)
     const { data: bultoCounts } = await supabase
       .from("bultos")
       .select("client_id")
-      .is("deleted_at", null)
-      .in("status", ["stored", "scheduled_return"]);
+      .is("deleted_at", null);
 
     const countMap: Record<string, number> = {};
     (bultoCounts || []).forEach((b: { client_id: string }) => {
@@ -76,6 +75,13 @@ function ClientesContent() {
       ...c,
       bultos_count: countMap[c.id as string] || 0,
     })) as (Client & { bultos_count: number })[];
+
+    // Sort by nombre_fantasia alphabetically (fallback to name)
+    mapped.sort((a, b) => {
+      const nameA = (a.nombre_fantasia || a.name || "").toLowerCase();
+      const nameB = (b.nombre_fantasia || b.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
 
     setClients(mapped);
     setLoading(false);
@@ -231,11 +237,11 @@ function ClientesContent() {
 
               {/* Client info */}
               <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                {client.name}
+                {client.nombre_fantasia || client.name}
               </h3>
               {client.nombre_fantasia && (
                 <p className="text-xs text-muted font-medium mt-0.5 uppercase">
-                  {client.nombre_fantasia}
+                  {client.name}
                 </p>
               )}
               {client.address && (

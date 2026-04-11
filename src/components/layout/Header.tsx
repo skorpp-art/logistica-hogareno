@@ -1,8 +1,6 @@
 "use client";
 
-import { Search, Moon, Sun, Menu } from "lucide-react";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Moon, Sun, Menu } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 
 interface HeaderProps {
@@ -10,17 +8,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuToggle }: HeaderProps) {
-  const [search, setSearch] = useState("");
-  const [focused, setFocused] = useState(false);
-  const router = useRouter();
   const { theme, toggleTheme } = useTheme();
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (search.trim()) {
-      router.push(`/clientes?q=${encodeURIComponent(search.trim())}`);
-    }
-  };
 
   return (
     <header className="h-[56px] bg-card/80 glass border-b border-card-border/50 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-30 gap-3">
@@ -47,21 +35,6 @@ export default function Header({ onMenuToggle }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <form onSubmit={handleSearch} className="relative hidden sm:block">
-          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 transition-colors duration-200 ${focused ? 'text-accent' : 'text-muted'}`} />
-          <input
-            type="text"
-            placeholder="Buscar cliente..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            className={`pl-9 pr-4 py-2 text-[13px] bg-background/60 border rounded-xl text-foreground placeholder:text-muted/60 transition-all duration-300 ${
-              focused ? 'border-accent/40 shadow-[0_0_0_3px] shadow-accent/10 w-64' : 'border-card-border w-48 lg:w-56'
-            }`}
-          />
-        </form>
-
         <button
           onClick={toggleTheme}
           className="p-2.5 rounded-xl text-muted hover:text-foreground hover:bg-accent/10 transition-all duration-200 group"

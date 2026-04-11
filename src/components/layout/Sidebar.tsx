@@ -13,6 +13,7 @@ import {
   LogOut,
   Package,
   ScanLine,
+  Truck,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/directorio", label: "Directorio", icon: BookUser },
   { href: "/escaner", label: "Escáner", icon: ScanLine },
+  { href: "/ruteo", label: "Ruteo", icon: Truck },
   { href: "/papelera", label: "Papelera", icon: Trash2 },
   { href: "/asistente", label: "Asistente", icon: MessageSquare },
 ];

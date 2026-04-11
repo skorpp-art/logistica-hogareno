@@ -33,11 +33,19 @@ export default function ClienteDetailPage() {
 }
 
 const STATUS_OPTIONS = [
-  { value: "stored", label: "ALMACENADO", color: "bg-green-100 text-green-700" },
-  { value: "scheduled_return", label: "RETORNO PROG.", color: "bg-amber-100 text-amber-700" },
-  { value: "returned", label: "DEVUELTO", color: "bg-blue-100 text-blue-700" },
   { value: "cancelled", label: "CANCELADO", color: "bg-red-100 text-red-700" },
   { value: "duplicate", label: "DUPLICADO", color: "bg-purple-100 text-purple-700" },
+  { value: "cambio", label: "CAMBIO", color: "bg-orange-100 text-orange-700" },
+  { value: "devolucion", label: "DEVOLUCIÓN", color: "bg-blue-100 text-blue-700" },
+  { value: "rechazado", label: "RECHAZADO X COMPRADOR", color: "bg-rose-100 text-rose-700" },
+  { value: "ficha", label: "FICHA", color: "bg-indigo-100 text-indigo-700" },
+];
+
+const ALL_STATUS_OPTIONS = [
+  { value: "stored", label: "ALMACENADO", color: "bg-green-100 text-green-700" },
+  { value: "scheduled_return", label: "RETORNO PROG.", color: "bg-amber-100 text-amber-700" },
+  ...STATUS_OPTIONS,
+  { value: "returned", label: "DEVUELTO", color: "bg-teal-100 text-teal-700" },
 ];
 
 function ClienteDetailContent() {
@@ -55,6 +63,7 @@ function ClienteDetailContent() {
     destination_address: "",
     destination_locality: "",
     scheduled_return_date: "",
+    status: "stored" as string,
   });
   const [saving, setSaving] = useState(false);
 
@@ -103,6 +112,7 @@ function ClienteDetailContent() {
       destination_address: "",
       destination_locality: "",
       scheduled_return_date: "",
+      status: "stored",
     });
     setShowForm(true);
   };
@@ -115,6 +125,7 @@ function ClienteDetailContent() {
       destination_address: bulto.destination_address || "",
       destination_locality: bulto.destination_locality || "",
       scheduled_return_date: bulto.scheduled_return_date || "",
+      status: bulto.status,
     });
     setShowForm(true);
   };
@@ -123,6 +134,10 @@ function ClienteDetailContent() {
     e.preventDefault();
     setSaving(true);
     const supabase = createClient();
+
+    // Use timezone-aware local date
+    const now = new Date();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
     if (editingBulto) {
       const { error } = await supabase
@@ -134,7 +149,7 @@ function ClienteDetailContent() {
           destination_address: form.destination_address || null,
           destination_locality: form.destination_locality || null,
           scheduled_return_date: form.scheduled_return_date || null,
-          status: form.scheduled_return_date ? "scheduled_return" : editingBulto.status,
+          status: form.status,
           updated_at: new Date().toISOString(),
         })
         .eq("id", editingBulto.id);
@@ -152,8 +167,8 @@ function ClienteDetailContent() {
         description: form.description || null,
         destination_address: form.destination_address || null,
         destination_locality: form.destination_locality || null,
-        status: form.scheduled_return_date ? "scheduled_return" : "stored",
-        entry_date: new Date().toISOString().split("T")[0],
+        status: form.status,
+        entry_date: localDate,
         scheduled_return_date: form.scheduled_return_date || null,
       });
       if (error) {
@@ -170,6 +185,7 @@ function ClienteDetailContent() {
       destination_address: "",
       destination_locality: "",
       scheduled_return_date: "",
+      status: "stored",
     });
     setShowForm(false);
     setEditingBulto(null);
@@ -402,7 +418,7 @@ function ClienteDetailContent() {
                   <td>${b.description || b.tracking_id || b.barcode || "-"}</td>
                   <td>${b.entry_date}</td>
                   <td>${b.destination_address ? b.destination_address + (b.destination_locality ? " - " + b.destination_locality : "") : "-"}</td>
-                  <td class="status">${STATUS_OPTIONS.find((s) => s.value === b.status)?.label || b.status}</td>
+                  <td class="status">${ALL_STATUS_OPTIONS.find((s) => s.value === b.status)?.label || b.status}</td>
                 </tr>`
                 )
                 .join("")}
@@ -718,6 +734,22 @@ function ClienteDetailContent() {
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
+                  Estado
+                </label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-card-border rounded-xl text-sm bg-background text-foreground focus:ring-2 focus:ring-accent/40"
+                >
+                  <option value="stored">ALMACENADO</option>
+                  <option value="scheduled_return">RETORNO PROG.</option>
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
                   Fecha devoluci&oacute;n programada
                 </label>
                 <input
@@ -871,11 +903,11 @@ function ClienteDetailContent() {
                           handleStatusChange(bulto.id, e.target.value)
                         }
                         className={`text-[10px] font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${
-                          STATUS_OPTIONS.find((s) => s.value === bulto.status)
+                          ALL_STATUS_OPTIONS.find((s) => s.value === bulto.status)
                             ?.color || "bg-gray-100 text-gray-600"
                         }`}
                       >
-                        {STATUS_OPTIONS.map((opt) => (
+                        {ALL_STATUS_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
                           </option>
