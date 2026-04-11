@@ -278,7 +278,7 @@ export default function ControlGeneralPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 stagger-children">
-        <StatsCard label="Total Stock" value={stats.totalStock} icon={Package} iconColor="text-blue-400" iconBg="bg-blue-500/10" gradient="stat-blue" />
+        <StatsCard label="Total Stock" value={stats.totalStock} icon={Package} iconColor="text-blue-400" iconBg="bg-blue-500/10" gradient="stat-blue" href="/clientes?filtro=con_paquetes" />
         <StatsCard label="Clientes" value={stats.totalClients} icon={Users} iconColor="text-emerald-400" iconBg="bg-emerald-500/10" gradient="stat-green" />
         <StatsCard label="Alertas Stock" value={stats.stockAlerts} icon={AlertTriangle} iconColor="text-amber-400" iconBg="bg-amber-500/10" gradient="stat-amber" />
         <StatsCard label="En Papelera" value={stats.papeleraCount} icon={Trash2} iconColor="text-red-400" iconBg="bg-red-500/10" gradient="stat-red" />

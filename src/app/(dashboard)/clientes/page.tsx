@@ -47,6 +47,8 @@ function ClientesContent() {
   useEffect(() => {
     const q = searchParams.get("q");
     if (q) setSearch(q);
+    const filtro = searchParams.get("filtro");
+    if (filtro === "con_paquetes") setFilterBy("with_bultos");
   }, [searchParams]);
 
   useEffect(() => {
