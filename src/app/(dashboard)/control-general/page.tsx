@@ -195,7 +195,6 @@ export default function ControlGeneralPage() {
     const { data: oldBultos, count: oldCount } = await supabase
       .from("bultos")
       .select("id, entry_date, tracking_id, clients(name)", { count: "exact" })
-      .eq("status", "stored")
       .is("deleted_at", null)
       .lte("entry_date", fifteenStr)
       .order("entry_date")
@@ -217,11 +216,10 @@ export default function ControlGeneralPage() {
 
     setTodayTasks(tasks);
 
-    // Average days in depot
+    // Average days in depot (all active bultos)
     const { data: storedBultos } = await supabase
       .from("bultos")
       .select("entry_date")
-      .eq("status", "stored")
       .is("deleted_at", null);
 
     if (storedBultos && storedBultos.length > 0) {
