@@ -18,6 +18,7 @@ import type { Bulto, Client } from "@/lib/types/database";
 
 interface BultoWithClient extends Bulto {
   clientName: string;
+  clientAddress: string;
 }
 
 export default function RuteoPage() {
@@ -41,18 +42,20 @@ export default function RuteoPage() {
           .order("destination_locality", { ascending: true }),
         supabase
           .from("clients")
-          .select("id, name, nombre_fantasia")
+          .select("id, name, nombre_fantasia, address")
           .is("deleted_at", null),
       ]);
 
       const bultosData: Bulto[] = bultosRes.data ?? [];
-      const clientsData: Pick<Client, "id" | "name" | "nombre_fantasia">[] = clientsRes.data ?? [];
+      const clientsData: Pick<Client, "id" | "name" | "nombre_fantasia" | "address">[] = clientsRes.data ?? [];
 
-      const clientMap = new Map(clientsData.map((c) => [c.id, c.nombre_fantasia || c.name]));
+      const clientNameMap = new Map(clientsData.map((c) => [c.id, c.nombre_fantasia || c.name]));
+      const clientAddressMap = new Map(clientsData.map((c) => [c.id, c.address || ""]));
 
       const merged: BultoWithClient[] = bultosData.map((b) => ({
         ...b,
-        clientName: clientMap.get(b.client_id) ?? "Sin cliente",
+        clientName: clientNameMap.get(b.client_id) ?? "Sin cliente",
+        clientAddress: clientAddressMap.get(b.client_id) ?? "",
       }));
 
       setBultos(merged);
@@ -74,8 +77,7 @@ export default function RuteoPage() {
     return bultos.filter(
       (b) =>
         b.clientName.toLowerCase().includes(q) ||
-        (b.destination_address ?? "").toLowerCase().includes(q) ||
-        (b.destination_locality ?? "").toLowerCase().includes(q) ||
+        b.clientAddress.toLowerCase().includes(q) ||
         (b.tracking_id ?? "").toLowerCase().includes(q)
     );
   }, [bultos, searchQuery]);
@@ -112,11 +114,11 @@ export default function RuteoPage() {
   // Build route from selected items, grouped by locality
   const buildRoute = () => {
     const selected = bultos.filter((b) => selectedIds.has(b.id));
-    // Sort by locality then by client name
+    // Sort by client address then by client name
     selected.sort((a, b) => {
-      const locA = (a.destination_locality ?? "").toLowerCase();
-      const locB = (b.destination_locality ?? "").toLowerCase();
-      if (locA !== locB) return locA.localeCompare(locB);
+      const addrA = a.clientAddress.toLowerCase();
+      const addrB = b.clientAddress.toLowerCase();
+      if (addrA !== addrB) return addrA.localeCompare(addrB);
       return a.clientName.localeCompare(b.clientName);
     });
     setRouteItems(selected);
@@ -144,22 +146,19 @@ export default function RuteoPage() {
   const googleMapsUrl = useMemo(() => {
     if (routeItems.length === 0) return "";
     const addresses = routeItems
-      .map((item) => {
-        const parts = [item.destination_address, item.destination_locality].filter(Boolean);
-        return parts.join(", ");
-      })
+      .map((item) => item.clientAddress)
       .filter((a) => a.length > 0)
       .map((a) => encodeURIComponent(a));
     return `https://www.google.com/maps/dir/${addresses.join("/")}`;
   }, [routeItems]);
 
-  // Group route items by locality
+  // Group route items by client address
   const groupedRouteItems = useMemo(() => {
     const groups: Record<string, BultoWithClient[]> = {};
     routeItems.forEach((item) => {
-      const loc = item.destination_locality ?? "Sin localidad";
-      if (!groups[loc]) groups[loc] = [];
-      groups[loc].push(item);
+      const addr = item.clientAddress || "Sin dirección";
+      if (!groups[addr]) groups[addr] = [];
+      groups[addr].push(item);
     });
     return groups;
   }, [routeItems]);
@@ -211,8 +210,7 @@ export default function RuteoPage() {
             <tr className="border-b-2 border-black">
               <th className="p-2 text-left w-8">#</th>
               <th className="p-2 text-left">Cliente</th>
-              <th className="p-2 text-left">Dirección</th>
-              <th className="p-2 text-left">Localidad</th>
+              <th className="p-2 text-left">Dirección del local</th>
               <th className="p-2 text-left">Tracking</th>
               <th className="p-2 text-center w-24">Entregado</th>
             </tr>
@@ -222,8 +220,7 @@ export default function RuteoPage() {
               <tr key={item.id} className="border-b border-gray-300">
                 <td className="p-2 font-medium">{idx + 1}</td>
                 <td className="p-2">{item.clientName}</td>
-                <td className="p-2">{item.destination_address ?? "-"}</td>
-                <td className="p-2">{item.destination_locality ?? "-"}</td>
+                <td className="p-2">{item.clientAddress || "-"}</td>
                 <td className="p-2 font-mono text-xs">{item.tracking_id ?? "-"}</td>
                 <td className="p-2 text-center">
                   <div className="w-5 h-5 border-2 border-black inline-block" />
@@ -310,8 +307,7 @@ export default function RuteoPage() {
                   </th>
                   <th className="p-2 text-left">Tracking</th>
                   <th className="p-2 text-left">Cliente</th>
-                  <th className="p-2 text-left hidden md:table-cell">Dirección</th>
-                  <th className="p-2 text-left hidden sm:table-cell">Localidad</th>
+                  <th className="p-2 text-left hidden md:table-cell">Dirección del local</th>
                   <th className="p-2 text-left">Estado</th>
                 </tr>
               </thead>
@@ -339,10 +335,7 @@ export default function RuteoPage() {
                     </td>
                     <td className="p-2 text-foreground font-medium">{b.clientName}</td>
                     <td className="p-2 text-muted hidden md:table-cell">
-                      {b.destination_address ?? "-"}
-                    </td>
-                    <td className="p-2 text-muted hidden sm:table-cell">
-                      {b.destination_locality ?? "-"}
+                      {b.clientAddress || "-"}
                     </td>
                     <td className="p-2">
                       <span
@@ -426,7 +419,7 @@ export default function RuteoPage() {
                         {item.clientName}
                       </p>
                       <p className="text-xs text-muted truncate">
-                        {item.destination_address ?? "Sin dirección"} &middot;{" "}
+                        {item.clientAddress || "Sin dirección"} &middot;{" "}
                         <span className="font-mono">{item.tracking_id ?? "-"}</span>
                       </p>
                     </div>
