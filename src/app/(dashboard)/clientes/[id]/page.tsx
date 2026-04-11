@@ -60,7 +60,7 @@ function ClienteDetailContent() {
     description: "",
     destination_address: "",
     destination_locality: "",
-    scheduled_return_date: "",
+    entry_date: "",
     status: "stored" as string,
   });
   const [saving, setSaving] = useState(false);
@@ -109,7 +109,7 @@ function ClienteDetailContent() {
       description: "",
       destination_address: "",
       destination_locality: "",
-      scheduled_return_date: "",
+      entry_date: "",
       status: "stored",
     });
     setShowForm(true);
@@ -122,7 +122,7 @@ function ClienteDetailContent() {
       description: bulto.description || "",
       destination_address: bulto.destination_address || "",
       destination_locality: bulto.destination_locality || "",
-      scheduled_return_date: bulto.scheduled_return_date || "",
+      entry_date: bulto.entry_date || "",
       status: bulto.status,
     });
     setShowForm(true);
@@ -146,7 +146,7 @@ function ClienteDetailContent() {
           description: form.description || null,
           destination_address: form.destination_address || null,
           destination_locality: form.destination_locality || null,
-          scheduled_return_date: form.scheduled_return_date || null,
+          entry_date: form.entry_date || localDate,
           status: form.status,
           updated_at: new Date().toISOString(),
         })
@@ -166,8 +166,7 @@ function ClienteDetailContent() {
         destination_address: form.destination_address || null,
         destination_locality: form.destination_locality || null,
         status: form.status,
-        entry_date: localDate,
-        scheduled_return_date: form.scheduled_return_date || null,
+        entry_date: form.entry_date || localDate,
       });
       if (error) {
         console.error("Error inserting bulto:", error);
@@ -182,7 +181,7 @@ function ClienteDetailContent() {
       description: "",
       destination_address: "",
       destination_locality: "",
-      scheduled_return_date: "",
+      entry_date: "",
       status: "stored",
     });
     setShowForm(false);
@@ -723,15 +722,15 @@ function ClienteDetailContent() {
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-muted uppercase tracking-wider mb-1">
-                  Fecha devoluci&oacute;n programada
+                  Fecha del paquete
                 </label>
                 <input
                   type="date"
-                  value={form.scheduled_return_date}
+                  value={form.entry_date}
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      scheduled_return_date: e.target.value,
+                      entry_date: e.target.value,
                     })
                   }
                   className="w-full px-4 py-2.5 border border-card-border rounded-xl text-sm bg-background text-foreground focus:ring-2 focus:ring-accent/40"
