@@ -149,7 +149,8 @@ export default function RuteoPage() {
       .map((item) => item.clientAddress)
       .filter((a) => a.length > 0)
       .map((a) => encodeURIComponent(a));
-    return `https://www.google.com/maps/dir/${addresses.join("/")}`;
+    const origin = encodeURIComponent("Córdoba 999, Morón, Provincia de Buenos Aires");
+    return `https://www.google.com/maps/dir/${origin}/${addresses.join("/")}`;
   }, [routeItems]);
 
   // Group route items by client address
@@ -203,6 +204,7 @@ export default function RuteoPage() {
             LOGISTICA HOGAREÑO - HOJA DE RUTA
           </h1>
           <p className="text-sm text-gray-600 mt-1 capitalize">{todayStr}</p>
+          <p className="text-xs text-gray-500 mt-1">Punto de partida: Córdoba 999, Morón, Provincia de Buenos Aires</p>
         </div>
 
         <table className="w-full border-collapse text-sm">
