@@ -37,19 +37,18 @@ export default function RuteoPage() {
         supabase
           .from("bultos")
           .select("*")
-          .in("status", ["scheduled_return", "stored"])
           .is("deleted_at", null)
           .order("destination_locality", { ascending: true }),
         supabase
           .from("clients")
-          .select("id, name")
+          .select("id, name, nombre_fantasia")
           .is("deleted_at", null),
       ]);
 
       const bultosData: Bulto[] = bultosRes.data ?? [];
-      const clientsData: Pick<Client, "id" | "name">[] = clientsRes.data ?? [];
+      const clientsData: Pick<Client, "id" | "name" | "nombre_fantasia">[] = clientsRes.data ?? [];
 
-      const clientMap = new Map(clientsData.map((c) => [c.id, c.name]));
+      const clientMap = new Map(clientsData.map((c) => [c.id, c.nombre_fantasia || c.name]));
 
       const merged: BultoWithClient[] = bultosData.map((b) => ({
         ...b,
