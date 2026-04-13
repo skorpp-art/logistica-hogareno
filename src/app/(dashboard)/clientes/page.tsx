@@ -12,6 +12,9 @@ import {
   Package,
   ArrowRight,
   X,
+  Upload,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -43,6 +46,26 @@ function ClientesContent() {
   const [saving, setSaving] = useState(false);
   const [filterBy, setFilterBy] = useState<"all" | "with_bultos" | "no_bultos" | "alphabetical">("all");
   const searchParams = useSearchParams();
+
+  // Excel import state
+  interface ImportRow {
+    nombre_fantasia: string;
+    tracking: string;
+    fecha: string;
+    direccion: string;
+    localidad: string;
+  }
+  interface ImportGroup {
+    nombre_fantasia: string;
+    clientId: string | null;
+    clientName: string | null;
+    bultos: ImportRow[];
+    matched: boolean;
+  }
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importGroups, setImportGroups] = useState<ImportGroup[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ ok: number; fail: number } | null>(null);
 
   useEffect(() => {
     const q = searchParams.get("q");
@@ -145,6 +168,179 @@ function ClientesContent() {
     fetchClients();
   };
 
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    const XLSX = await import("xlsx");
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const allRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+
+    // Find header row (scan first 15 rows)
+    let headerRowIdx = -1;
+    const colMap: Record<string, number> = {};
+
+    for (let i = 0; i < Math.min(15, allRows.length); i++) {
+      const row = allRows[i] as string[];
+      const hasKeyword = row.some((cell) => {
+        const val = String(cell).toLowerCase().trim();
+        return val.includes("fantasia") || val.includes("fantasía") || val.includes("tracking") || val.includes("nombre") || val.includes("fecha") || val.includes("direccion") || val.includes("dirección");
+      });
+      if (hasKeyword) {
+        headerRowIdx = i;
+        row.forEach((cell, idx) => {
+          const val = String(cell).toLowerCase().trim();
+          if (val) colMap[val] = idx;
+        });
+        break;
+      }
+    }
+
+    if (headerRowIdx === -1) {
+      alert("No se encontró la fila de encabezados en el Excel.");
+      return;
+    }
+
+    const findCol = (...names: string[]): number => {
+      for (const name of names) {
+        const lower = name.toLowerCase();
+        for (const [key, idx] of Object.entries(colMap)) {
+          if (key === lower || key.includes(lower) || lower.includes(key)) return idx;
+        }
+      }
+      return -1;
+    };
+
+    const fantasiaCol = findCol("nombre fantasía", "nombre fantasia", "fantasia", "fantasía", "cliente", "nombre de fantasia");
+    const trackingCol = findCol("tracking", "traking", "trainckng", "trackng", "id tracking", "numero envio", "nro envio", "código", "codigo");
+    const fechaCol = findCol("fecha", "date", "fecha ingreso", "fecha paquete");
+    const direccionCol = findCol("direccion", "dirección", "domicilio", "address", "calle");
+    const localidadCol = findCol("localidad", "ciudad", "zona", "partido", "locality");
+
+    if (fantasiaCol === -1) {
+      alert("No se encontró la columna de 'Nombre Fantasía' o similar.");
+      return;
+    }
+
+    const dataRows = allRows.slice(headerRowIdx + 1);
+    const rows: ImportRow[] = [];
+
+    for (const row of dataRows) {
+      const r = row as string[];
+      const fantasia = String(r[fantasiaCol] || "").trim();
+      if (!fantasia) continue;
+
+      rows.push({
+        nombre_fantasia: fantasia,
+        tracking: trackingCol >= 0 ? String(r[trackingCol] || "").trim() : "",
+        fecha: fechaCol >= 0 ? String(r[fechaCol] || "").trim() : "",
+        direccion: direccionCol >= 0 ? String(r[direccionCol] || "").trim() : "",
+        localidad: localidadCol >= 0 ? String(r[localidadCol] || "").trim() : "",
+      });
+    }
+
+    if (rows.length === 0) {
+      alert("No se encontraron paquetes en el archivo.");
+      return;
+    }
+
+    // Group by nombre_fantasia and match with existing clients
+    const groupMap: Record<string, ImportRow[]> = {};
+    rows.forEach((r) => {
+      const key = r.nombre_fantasia.toLowerCase();
+      if (!groupMap[key]) groupMap[key] = [];
+      groupMap[key].push(r);
+    });
+
+    const groups: ImportGroup[] = Object.entries(groupMap).map(([, bultos]) => {
+      const fantasia = bultos[0].nombre_fantasia;
+      const lower = fantasia.toLowerCase();
+      // Try to match with existing client
+      const match = clients.find(
+        (c) =>
+          (c.nombre_fantasia && c.nombre_fantasia.toLowerCase() === lower) ||
+          c.name.toLowerCase() === lower
+      );
+      return {
+        nombre_fantasia: fantasia,
+        clientId: match?.id || null,
+        clientName: match ? (match.nombre_fantasia || match.name) : null,
+        bultos,
+        matched: !!match,
+      };
+    });
+
+    // Sort: matched first, then unmatched
+    groups.sort((a, b) => (a.matched === b.matched ? 0 : a.matched ? -1 : 1));
+
+    setImportGroups(groups);
+    setImportResult(null);
+    setShowImportModal(true);
+  };
+
+  const handleConfirmImport = async () => {
+    setImporting(true);
+    const supabase = createClient();
+    let ok = 0;
+    let fail = 0;
+
+    for (const group of importGroups) {
+      if (!group.matched || !group.clientId) {
+        fail += group.bultos.length;
+        continue;
+      }
+
+      for (const b of group.bultos) {
+        // Parse date - try various formats
+        let entryDate = "";
+        if (b.fecha) {
+          // Try to parse Excel serial number or date string
+          const num = Number(b.fecha);
+          if (!isNaN(num) && num > 40000) {
+            // Excel serial date
+            const d = new Date((num - 25569) * 86400000);
+            entryDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          } else {
+            // Try parsing as date string
+            const d = new Date(b.fecha);
+            if (!isNaN(d.getTime())) {
+              entryDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            }
+          }
+        }
+        if (!entryDate) {
+          const now = new Date();
+          entryDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        }
+
+        const { error } = await supabase.from("bultos").insert({
+          client_id: group.clientId,
+          tracking_id: b.tracking || null,
+          barcode: b.tracking || null,
+          description: null,
+          destination_address: b.direccion || null,
+          destination_locality: b.localidad || null,
+          status: "stored",
+          entry_date: entryDate,
+        });
+
+        if (error) {
+          console.error("Import error:", error);
+          fail++;
+        } else {
+          ok++;
+        }
+      }
+    }
+
+    setImportResult({ ok, fail });
+    setImporting(false);
+    fetchClients();
+  };
+
   const filtered = clients
     .filter((c) => {
       // Text search
@@ -184,13 +380,25 @@ function ClientesContent() {
             Gestión de cuentas y acceso a stock individual
           </p>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-600/25 transition-all duration-200"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo Cliente
-        </button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 px-5 py-2.5 border-2 border-card-border text-foreground rounded-xl text-sm font-medium hover:bg-accent/10 transition-all duration-200 cursor-pointer">
+            <Upload className="w-4 h-4" />
+            Importar Excel
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleExcelImport}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-600/25 transition-all duration-200"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo Cliente
+          </button>
+        </div>
       </div>
 
       {/* Search + Filters */}
@@ -426,6 +634,110 @@ function ClientesContent() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Excel Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl shadow-xl w-full max-w-2xl p-6 animate-scale-in border border-card-border max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Upload className="w-5 h-5 text-foreground" />
+                <h2 className="text-lg font-bold text-foreground">
+                  Importar paquetes desde Excel
+                </h2>
+              </div>
+              <button
+                onClick={() => { setShowImportModal(false); setImportGroups([]); setImportResult(null); }}
+                className="p-1 text-muted hover:text-foreground transition-all duration-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {importResult ? (
+              <div className="space-y-4">
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
+                  <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                  <p className="text-lg font-bold text-foreground">{importResult.ok} paquetes importados</p>
+                  {importResult.fail > 0 && (
+                    <p className="text-sm text-red-400 mt-1">{importResult.fail} no se pudieron importar (sin cliente asignado)</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setShowImportModal(false); setImportGroups([]); setImportResult(null); }}
+                  className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700"
+                >
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-muted">
+                  Se encontraron <span className="font-bold text-foreground">{importGroups.reduce((s, g) => s + g.bultos.length, 0)} paquetes</span> para <span className="font-bold text-foreground">{importGroups.length} clientes</span>:
+                </p>
+
+                <div className="space-y-3">
+                  {importGroups.map((group, idx) => (
+                    <div
+                      key={idx}
+                      className={`rounded-xl border p-4 ${
+                        group.matched
+                          ? "border-green-500/30 bg-green-500/5"
+                          : "border-red-500/30 bg-red-500/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {group.matched ? (
+                            <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                          )}
+                          <div>
+                            <p className="text-sm font-bold text-foreground">{group.nombre_fantasia}</p>
+                            {group.matched ? (
+                              <p className="text-xs text-green-500">Asignado a: {group.clientName}</p>
+                            ) : (
+                              <p className="text-xs text-red-400">No se encontró cliente — no se importará</p>
+                            )}
+                          </div>
+                        </div>
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold">
+                          {group.bultos.length}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {importGroups.some((g) => !g.matched) && (
+                  <p className="text-xs text-red-400 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Los clientes no encontrados no se importarán. Crealos primero si querés incluirlos.
+                  </p>
+                )}
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowImportModal(false); setImportGroups([]); }}
+                    className="flex-1 py-2.5 text-sm font-medium text-muted hover:text-foreground transition-all duration-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmImport}
+                    disabled={importing || !importGroups.some((g) => g.matched)}
+                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all duration-200"
+                  >
+                    {importing ? "Importando..." : `Importar ${importGroups.filter((g) => g.matched).reduce((s, g) => s + g.bultos.length, 0)} paquetes`}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
