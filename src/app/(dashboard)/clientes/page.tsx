@@ -323,7 +323,7 @@ function ClientesContent() {
           description: null,
           destination_address: b.direccion || null,
           destination_locality: b.localidad || null,
-          status: "stored",
+          status: "cancelled",
           entry_date: entryDate,
         });
 
