@@ -13,6 +13,7 @@ import {
   ArrowDown,
   X,
   Truck,
+  TrendingUp,
 } from "lucide-react";
 
 interface ClientRoute {
@@ -30,6 +31,12 @@ export default function RuteoPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [routeItems, setRouteItems] = useState<ClientRoute[]>([]);
   const [showPrint, setShowPrint] = useState(false);
+
+  // Prediction state
+  const [predTotalRoutes, setPredTotalRoutes] = useState(55);
+  const [predTarget, setPredTarget] = useState(30);
+  const [predTolerance, setPredTolerance] = useState(5);
+  const [predCurrentDrivers, setPredCurrentDrivers] = useState(2);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -167,6 +174,39 @@ export default function RuteoPage() {
     day: "numeric",
   });
 
+  // Prediction computed values
+  const predSafe = Math.max(1, predCurrentDrivers);
+  const predAvg = predTotalRoutes / predSafe;
+  const predNeeded = Math.ceil(predTotalRoutes / Math.max(1, predTarget));
+  const predDiff = predNeeded - predSafe;
+  const bUC = predTarget + predTolerance * 2;
+  const bUW = predTarget + predTolerance;
+  const bLW = predTarget - predTolerance;
+  const bLC = Math.max(0, predTarget - predTolerance * 2);
+  const predZone =
+    predAvg > bUC || predAvg < bLC ? "critical" : predAvg > bUW || predAvg < bLW ? "warning" : "optimal";
+
+  // SVG chart constants
+  const SL = 58, SR = 635, ST = 18, SB = 265;
+  const svgMaxN = Math.max(predSafe + 3, 6);
+  const svgMaxY = Math.max(60, predTotalRoutes + 5);
+  const xS = (n: number) => SL + ((n - 1) / (svgMaxN - 1)) * (SR - SL);
+  const yS = (v: number) => Math.max(ST, Math.min(SB, SB - (Math.min(v, svgMaxY) / svgMaxY) * (SB - ST)));
+  const curvePts: string[] = [];
+  for (let n = 1; n <= svgMaxN; n += 0.06) {
+    curvePts.push(`${xS(n).toFixed(1)},${yS(predTotalRoutes / n).toFixed(1)}`);
+  }
+  const curvePath = `M ${curvePts.join(" L ")}`;
+  const svgBands = [
+    { y1: bUC, y2: svgMaxY, fill: "rgba(239,68,68,0.10)" },
+    { y1: bUW, y2: bUC, fill: "rgba(245,158,11,0.13)" },
+    { y1: bLW, y2: bUW, fill: "rgba(34,197,94,0.10)" },
+    { y1: bLC, y2: bLW, fill: "rgba(245,158,11,0.13)" },
+    { y1: 0, y2: bLC, fill: "rgba(239,68,68,0.10)" },
+  ];
+  const yTicks = Array.from(new Set([0, 10, 20, bLC, bLW, predTarget, bUW, bUC, 50].filter((v) => v >= 0 && v <= svgMaxY)));
+  yTicks.sort((a, b) => a - b);
+
   // Print view
   if (showPrint) {
     return (
@@ -248,6 +288,179 @@ export default function RuteoPage() {
       <div className="flex items-center gap-3">
         <Truck className="w-7 h-7 text-accent" />
         <h1 className="text-2xl font-bold text-foreground">Ruteo de entregas</h1>
+      </div>
+
+      {/* Prediction Section */}
+      <div className="card-base p-5 space-y-5">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-accent" />
+          <h2 className="text-lg font-semibold text-foreground">Predicción de Choferes</h2>
+        </div>
+
+        {/* Config inputs */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Recorridos totales", value: predTotalRoutes, set: setPredTotalRoutes },
+            { label: "Objetivo (prom./chofer)", value: predTarget, set: setPredTarget },
+            { label: "Tolerancia (±)", value: predTolerance, set: setPredTolerance },
+            { label: "Choferes actuales", value: predCurrentDrivers, set: setPredCurrentDrivers },
+          ].map(({ label, value, set }) => (
+            <div key={label}>
+              <label className="block text-xs text-muted font-semibold mb-1 uppercase tracking-wide">{label}</label>
+              <input
+                type="number"
+                min={1}
+                value={value}
+                onChange={(e) => set(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full px-3 py-2 bg-background border border-card-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Result cards */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className={`p-4 rounded-xl text-center border ${predZone === "optimal" ? "bg-emerald-500/10 border-emerald-500/20" : predZone === "warning" ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20"}`}>
+            <p className={`text-3xl font-extrabold tracking-tight ${predZone === "optimal" ? "text-emerald-400" : predZone === "warning" ? "text-amber-400" : "text-red-400"}`}>
+              {predAvg.toFixed(1)}
+            </p>
+            <p className="text-[10px] text-muted font-bold mt-1 uppercase tracking-wider">Promedio actual</p>
+            <p className={`text-[11px] mt-1.5 font-semibold ${predZone === "optimal" ? "text-emerald-400" : predZone === "warning" ? "text-amber-400" : "text-red-400"}`}>
+              {predZone === "optimal" ? "✓ Zona óptima" : predZone === "warning" ? "⚠ Zona de alerta" : "✗ Zona crítica"}
+            </p>
+          </div>
+          <div className="p-4 rounded-xl text-center bg-blue-500/10 border border-blue-500/20">
+            <p className="text-3xl font-extrabold text-blue-400 tracking-tight">{predNeeded}</p>
+            <p className="text-[10px] text-muted font-bold mt-1 uppercase tracking-wider">Choferes necesarios</p>
+            <p className="text-[11px] mt-1.5 font-medium text-muted">para promedio de {predTarget}</p>
+          </div>
+          <div className={`p-4 rounded-xl text-center border ${predDiff > 0 ? "bg-amber-500/10 border-amber-500/20" : predDiff < 0 ? "bg-purple-500/10 border-purple-500/20" : "bg-emerald-500/10 border-emerald-500/20"}`}>
+            <p className={`text-3xl font-extrabold tracking-tight ${predDiff > 0 ? "text-amber-400" : predDiff < 0 ? "text-purple-400" : "text-emerald-400"}`}>
+              {predDiff > 0 ? `+${predDiff}` : predDiff}
+            </p>
+            <p className="text-[10px] text-muted font-bold mt-1 uppercase tracking-wider">Ajuste recomendado</p>
+            <p className="text-[11px] mt-1.5 font-medium text-muted">
+              {predDiff > 0 ? `Agregar ${predDiff} chofer${predDiff !== 1 ? "es" : ""}` : predDiff < 0 ? `Reducir ${Math.abs(predDiff)} chofer${Math.abs(predDiff) !== 1 ? "es" : ""}` : "Plantilla correcta"}
+            </p>
+          </div>
+        </div>
+
+        {/* Trading Bands Chart */}
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Análisis de Bandas — Recorridos por Chofer</p>
+          <div className="w-full overflow-x-auto rounded-xl border border-card-border bg-background/50">
+            <svg viewBox="0 0 680 300" className="w-full min-w-[380px]" style={{ height: "300px" }}>
+              {/* Band fills */}
+              {svgBands.map((band, i) => (
+                <rect
+                  key={i}
+                  x={SL}
+                  y={yS(band.y2)}
+                  width={SR - SL}
+                  height={Math.max(0, yS(band.y1) - yS(band.y2))}
+                  fill={band.fill}
+                />
+              ))}
+
+              {/* Horizontal band boundary lines */}
+              {[bLC, bLW, predTarget, bUW, bUC].filter(v => v >= 0 && v <= svgMaxY).map((v) => (
+                <line
+                  key={v}
+                  x1={SL} y1={yS(v)} x2={SR} y2={yS(v)}
+                  stroke={v === predTarget ? "#60a5fa" : v === bLW || v === bUW ? "#10b981" : "#f59e0b"}
+                  strokeWidth={v === predTarget ? 2 : 1}
+                  strokeDasharray={v === predTarget ? "8,4" : "4,4"}
+                  opacity={0.7}
+                />
+              ))}
+
+              {/* Band labels on the right */}
+              {[
+                { v: (bUC + svgMaxY) / 2, label: "Crítica alta", color: "#f87171" },
+                { v: (bUW + bUC) / 2, label: "Alerta alta", color: "#fb923c" },
+                { v: (bLW + bUW) / 2, label: `Óptima ±${predTolerance}`, color: "#4ade80" },
+                { v: (bLC + bLW) / 2, label: "Alerta baja", color: "#fb923c" },
+              ].filter(({ v }) => v >= 0 && v <= svgMaxY).map(({ v, label, color }) => (
+                <text key={label} x={SR + 4} y={yS(v) + 4} fontSize="9" fill={color} opacity={0.8}>{label}</text>
+              ))}
+
+              {/* Curve */}
+              <path d={curvePath} fill="none" stroke="#a78bfa" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+
+              {/* Current driver vertical line */}
+              <line
+                x1={xS(predSafe)} y1={ST} x2={xS(predSafe)} y2={SB}
+                stroke="#60a5fa" strokeWidth={1.5} strokeDasharray="5,3" opacity={0.5}
+              />
+
+              {/* Current driver dot */}
+              <circle cx={xS(predSafe)} cy={yS(predAvg)} r={7} fill="#60a5fa" stroke="#1e293b" strokeWidth={2.5} />
+              <text
+                x={xS(predSafe) + (xS(predSafe) > SR - 80 ? -10 : 10)}
+                y={yS(predAvg) - 10}
+                textAnchor={xS(predSafe) > SR - 80 ? "end" : "start"}
+                fontSize="11" fill="#60a5fa" fontWeight="bold"
+              >
+                {predAvg.toFixed(1)} rec/chofer
+              </text>
+
+              {/* Axes */}
+              <line x1={SL} y1={SB} x2={SR} y2={SB} stroke="#334155" strokeWidth={1} />
+              <line x1={SL} y1={ST} x2={SL} y2={SB} stroke="#334155" strokeWidth={1} />
+
+              {/* X axis ticks & labels */}
+              {Array.from({ length: svgMaxN }, (_, i) => i + 1).map((n) => (
+                <g key={n}>
+                  <line x1={xS(n)} y1={SB} x2={xS(n)} y2={SB + 5} stroke="#475569" strokeWidth={1} />
+                  <text x={xS(n)} y={SB + 16} textAnchor="middle" fontSize="11" fill="#64748b">{n}</text>
+                  {n === predSafe && (
+                    <text x={xS(n)} y={SB + 28} textAnchor="middle" fontSize="9" fill="#60a5fa" fontWeight="bold">actual</text>
+                  )}
+                  {n === predNeeded && n !== predSafe && (
+                    <text x={xS(n)} y={SB + 28} textAnchor="middle" fontSize="9" fill="#4ade80" fontWeight="bold">ideal</text>
+                  )}
+                </g>
+              ))}
+
+              {/* Y axis ticks & labels */}
+              {yTicks.map((v) => (
+                <g key={v}>
+                  <line x1={SL - 5} y1={yS(v)} x2={SL} y2={yS(v)} stroke="#475569" strokeWidth={1} />
+                  <text x={SL - 8} y={yS(v) + 4} textAnchor="end" fontSize="10" fill="#64748b">{v}</text>
+                </g>
+              ))}
+
+              {/* Axis labels */}
+              <text x={(SL + SR) / 2} y={293} textAnchor="middle" fontSize="11" fill="#475569">Cantidad de Choferes</text>
+              <text
+                x={14}
+                y={(ST + SB) / 2}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#475569"
+                transform={`rotate(-90,14,${(ST + SB) / 2})`}
+              >Prom. Recorridos</text>
+
+              {/* Target label */}
+              <text x={SL + 6} y={yS(predTarget) - 4} fontSize="10" fill="#60a5fa" opacity={0.9}>Objetivo: {predTarget}</text>
+            </svg>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 text-[11px]">
+            {[
+              { color: "bg-emerald-500/30", label: `Zona óptima (${bLW}–${bUW} rec/chofer)` },
+              { color: "bg-amber-500/30", label: `Alerta (${bLC}–${bLW} / ${bUW}–${bUC})` },
+              { color: "bg-red-500/30", label: `Crítica (<${bLC} / >${bUC})` },
+              { color: "bg-blue-400 rounded-full", label: "Situación actual", dot: true },
+            ].map(({ color, label, dot }) => (
+              <span key={label} className="flex items-center gap-1.5">
+                <span className={`${dot ? "w-3 h-3" : "w-4 h-3"} ${color} rounded-sm inline-block shrink-0`} />
+                <span className="text-muted">{label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Selection section */}
