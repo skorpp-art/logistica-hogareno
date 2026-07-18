@@ -105,6 +105,43 @@ async function fileToBase64(file: File): Promise<{ base64: string; mediaType: st
   });
 }
 
+// Convierte fechas de etiquetas ("18 JUN", "18/06", "18/06/2026", "2026-06-18")
+// a formato ISO YYYY-MM-DD. Si no se puede, devuelve "" (se usa la fecha de hoy).
+function normalizeDate(raw: string): string {
+  if (!raw) return "";
+  const s = raw.trim().toLowerCase();
+  const year = new Date().getFullYear();
+
+  // Ya viene ISO
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  const meses: Record<string, string> = {
+    ene: "01", feb: "02", mar: "03", abr: "04", may: "05", jun: "06",
+    jul: "07", ago: "08", sep: "09", oct: "10", nov: "11", dic: "12",
+  };
+
+  // "18 jun" o "18 jun 2026"
+  const txt = s.match(/(\d{1,2})\s*(?:de\s*)?([a-z]{3})[a-z]*\.?\s*(\d{4})?/);
+  if (txt && meses[txt[2]]) {
+    const dd = txt[1].padStart(2, "0");
+    const yyyy = txt[3] || String(year);
+    return `${yyyy}-${meses[txt[2]]}-${dd}`;
+  }
+
+  // "18/06" o "18/06/2026" o "18-06-2026"
+  const num = s.match(/(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{2,4}))?/);
+  if (num) {
+    const dd = num[1].padStart(2, "0");
+    const mm = num[2].padStart(2, "0");
+    let yyyy = num[3] || String(year);
+    if (yyyy.length === 2) yyyy = `20${yyyy}`;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return "";
+}
+
 function playDoubleBeep() {
   try {
     const ctx = new AudioContext();
@@ -362,22 +399,24 @@ function FotoEtiquetaTab() {
     const supabase = createClient();
     const today = new Date().toISOString().split("T")[0];
 
+    // Dirección de destino: preferir calle+número; si no, la dirección completa
+    const destAddress = ext.calle || ext.direccion_completa || "";
+    // Localidad: preferir localidad/barrio; si no, el partido
+    const destLocality = ext.localidad || ext.partido || "";
+
+    // Descripción / notas: destinatario + referencia útil para el chofer
     const descParts: string[] = [];
     if (ext.destinatario) descParts.push(ext.destinatario);
-    if (ext.direccion_completa) {
-      descParts.push(ext.direccion_completa);
-    } else {
-      if (ext.calle) descParts.push(ext.calle);
-      if (ext.localidad) descParts.push(ext.localidad);
-      if (ext.partido) descParts.push(ext.partido);
-    }
+    if (ext.notas) descParts.push(ext.notas);
 
     const insertData: Record<string, string> = {
       tracking_id: trackingId,
       description: descParts.join(" - ") || `Paquete ${trackingId}`,
       barcode: trackingId,
       status: "stored",
-      entry_date: ext.fecha || today,
+      entry_date: normalizeDate(ext.fecha) || today,
+      destination_address: destAddress,
+      destination_locality: destLocality,
     };
 
     if (photo.clientId) {
@@ -657,12 +696,12 @@ function QrScannerTab({ onGoToFoto }: { onGoToFoto: () => void }) {
     const supabase = createClient();
     const today = new Date().toISOString().split("T")[0];
 
+    const destAddress = result.fields.direccion || result.fields.address || "";
+    const destLocality = result.fields.localidad || result.fields.city || "";
+
     const descParts: string[] = [];
     if (result.fields.destinatario || result.fields.name) {
       descParts.push(result.fields.destinatario || result.fields.name);
-    }
-    if (result.fields.direccion || result.fields.address) {
-      descParts.push(result.fields.direccion || result.fields.address);
     }
 
     const insertData: Record<string, string> = {
@@ -671,6 +710,8 @@ function QrScannerTab({ onGoToFoto }: { onGoToFoto: () => void }) {
       barcode: result.tracking,
       status: "stored",
       entry_date: today,
+      destination_address: destAddress,
+      destination_locality: destLocality,
     };
 
     if (selectedClientId) {
