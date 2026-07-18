@@ -113,14 +113,14 @@ export default function Sidebar({ onClose }: SidebarProps) {
       {/* Footer */}
       <div className="relative z-10 p-4 pb-5">
         <div className="mx-3 mb-3 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
-        <a
-          href="/logistica.apk"
-          download
+        <Link
+          href="/descargar"
+          onClick={handleNavClick}
           className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-slate-400 hover:text-blue-400 hover:bg-blue-500/[0.08] rounded-xl w-full transition-all duration-200 font-medium"
         >
           <Download className="w-[18px] h-[18px]" />
-          Descargar app (APK)
-        </a>
+          App para celular
+        </Link>
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-slate-500 hover:text-red-400 hover:bg-red-500/[0.08] rounded-xl w-full transition-all duration-200 font-medium mt-0.5"
