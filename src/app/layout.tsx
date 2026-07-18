@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
+import PWA from "@/components/PWA";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -18,6 +19,10 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Logística",
   },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -29,6 +34,7 @@ export default function RootLayout({
     <html lang="es" className={`${geistMono.variable} h-full`} suppressHydrationWarning>
       <body className="h-full antialiased">
         <ThemeProvider>{children}</ThemeProvider>
+        <PWA />
       </body>
     </html>
   );
