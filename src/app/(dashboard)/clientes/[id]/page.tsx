@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useParams } from "next/navigation";
 import {
@@ -18,10 +18,61 @@ import {
   Calendar,
   Clock,
   Archive,
+  Camera,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import type { Client, Bulto } from "@/lib/types/database";
+
+// --- Helpers para el escáner de etiquetas ---
+async function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const MAX = 1200;
+      let w = img.width;
+      let h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("No canvas")); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+      resolve({ base64: dataUrl.split(",")[1], mediaType: "image/jpeg" });
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function normalizeDate(raw: string): string {
+  if (!raw) return "";
+  const s = raw.trim().toLowerCase();
+  const year = new Date().getFullYear();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const meses: Record<string, string> = {
+    ene: "01", feb: "02", mar: "03", abr: "04", may: "05", jun: "06",
+    jul: "07", ago: "08", sep: "09", oct: "10", nov: "11", dic: "12",
+  };
+  const txt = s.match(/(\d{1,2})\s*(?:de\s*)?([a-z]{3})[a-z]*\.?\s*(\d{4})?/);
+  if (txt && meses[txt[2]]) {
+    return `${txt[3] || String(year)}-${meses[txt[2]]}-${txt[1].padStart(2, "0")}`;
+  }
+  const num = s.match(/(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{2,4}))?/);
+  if (num) {
+    let yyyy = num[3] || String(year);
+    if (yyyy.length === 2) yyyy = `20${yyyy}`;
+    return `${yyyy}-${num[2].padStart(2, "0")}-${num[1].padStart(2, "0")}`;
+  }
+  return "";
+}
 
 export default function ClienteDetailPage() {
   return (
@@ -64,6 +115,11 @@ function ClienteDetailContent() {
     status: "stored" as string,
   });
   const [saving, setSaving] = useState(false);
+
+  // Escáner de etiqueta
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   // Batch selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -113,6 +169,45 @@ function ClienteDetailContent() {
       status: "stored",
     });
     setShowForm(true);
+  };
+
+  // Sacar foto a la etiqueta → IA lee → abre el formulario precargado para este cliente
+  const handleScanPhoto = async (file: File | null) => {
+    if (!file) return;
+    setScanning(true);
+    setScanError(null);
+    try {
+      const { base64, mediaType } = await fileToBase64(file);
+      const res = await fetch("/api/read-label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64, mediaType }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "No se pudo leer la etiqueta");
+      }
+      const d = json.data;
+      const descParts: string[] = [];
+      if (d.destinatario) descParts.push(d.destinatario);
+      if (d.notas || d.observaciones) descParts.push(d.notas || d.observaciones);
+
+      setEditingBulto(null);
+      setForm({
+        tracking_id: d.numero_envio || d.pack_id || "",
+        description: descParts.join(" - "),
+        destination_address: d.calle || d.direccion_completa || "",
+        destination_locality: d.localidad || d.partido || "",
+        entry_date: normalizeDate(d.fecha || ""),
+        status: "stored",
+      });
+      setShowForm(true);
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Error al leer la etiqueta");
+    } finally {
+      setScanning(false);
+    }
   };
 
   const openEditForm = (bulto: Bulto) => {
@@ -547,6 +642,25 @@ function ClienteDetailContent() {
             <Download className="w-4 h-4" />
             EXPORTAR PDF OFICIAL
           </button>
+          <input
+            ref={scanInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              handleScanPhoto(e.target.files?.[0] || null);
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => scanInputRef.current?.click()}
+            disabled={scanning}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-violet-700 hover:to-purple-700 transition-all duration-200 shadow-lg shadow-purple-600/25 disabled:opacity-60"
+          >
+            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+            {scanning ? "LEYENDO..." : "ESCANEAR ETIQUETA"}
+          </button>
           <button
             onClick={openNewForm}
             className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all duration-200 shadow-lg shadow-blue-600/25"
@@ -556,6 +670,27 @@ function ClienteDetailContent() {
           </button>
         </div>
       </div>
+
+      {/* Overlay mientras la IA lee la etiqueta */}
+      {scanning && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl shadow-xl px-8 py-7 border border-card-border flex flex-col items-center gap-3 animate-scale-in">
+            <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
+            <p className="text-sm font-bold text-foreground">Leyendo etiqueta con IA...</p>
+            <p className="text-xs text-muted">Se cargará a {client.name}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error de escaneo */}
+      {scanError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in max-w-md">
+          <span className="text-sm font-medium">{scanError}</span>
+          <button onClick={() => setScanError(null)} className="shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Client name + address */}
       <div className="flex items-center gap-4">
