@@ -70,6 +70,7 @@ interface QrResult {
   raw: string;
   tracking: string;
   fields: Record<string, string>;
+  isMlFlex: boolean;
   existing?: { id: string; description: string | null; status: string } | null;
   searching?: boolean;
 }
@@ -125,7 +126,16 @@ function playDoubleBeep() {
   }
 }
 
-function parseQrCode(raw: string): { tracking: string; fields: Record<string, string> } {
+// Nombres amigables para las claves del QR de ML Flex
+const QR_FIELD_LABELS: Record<string, string> = {
+  id: "Nro. de envío",
+  sender_id: "ID del vendedor",
+  hash_code: "Código de seguridad",
+  security_digit: "Dígito verificador",
+  codigo: "Código",
+};
+
+function parseQrCode(raw: string): { tracking: string; fields: Record<string, string>; isMlFlex: boolean } {
   // Try parsing as JSON (ML Flex format)
   try {
     const json = JSON.parse(raw);
@@ -134,16 +144,17 @@ function parseQrCode(raw: string): { tracking: string; fields: Record<string, st
       const fields: Record<string, string> = {};
       for (const [k, v] of Object.entries(json)) {
         if (typeof v === "string" || typeof v === "number") {
-          fields[k] = String(v);
+          fields[QR_FIELD_LABELS[k] || k] = String(v);
         }
       }
-      return { tracking: String(tracking), fields };
+      const isMlFlex = "id" in json && ("sender_id" in json || "hash_code" in json || "security_digit" in json);
+      return { tracking: String(tracking), fields, isMlFlex };
     }
   } catch {
     // Not JSON
   }
   // Fallback: use raw as tracking
-  return { tracking: raw.trim(), fields: { codigo: raw.trim() } };
+  return { tracking: raw.trim(), fields: { codigo: raw.trim() }, isMlFlex: false };
 }
 
 // ============================================================
@@ -191,7 +202,7 @@ export default function EscanerPage() {
         </button>
       </div>
 
-      {activeTab === "foto" ? <FotoEtiquetaTab /> : <QrScannerTab />}
+      {activeTab === "foto" ? <FotoEtiquetaTab /> : <QrScannerTab onGoToFoto={() => setActiveTab("foto")} />}
     </div>
   );
 }
@@ -208,6 +219,7 @@ function FotoEtiquetaTab() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
+  const autoProcessRef = useRef(false);
 
   // Fetch clients on mount
   useEffect(() => {
@@ -317,6 +329,15 @@ function FotoEtiquetaTab() {
     setProcessing(false);
   };
 
+  // Auto-procesar cuando la foto viene de la cámara (Sacar Foto)
+  useEffect(() => {
+    if (autoProcessRef.current && !processing && photos.some((p) => p.status === "pending")) {
+      autoProcessRef.current = false;
+      processPhotos();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos]);
+
   const updateExtracted = (photoId: string, field: keyof ExtractedLabel, value: string) => {
     setPhotos((prev) =>
       prev.map((p) =>
@@ -411,6 +432,7 @@ function FotoEtiquetaTab() {
           <button
             onClick={() => {
               if (fileInputRef.current) {
+                autoProcessRef.current = true;
                 fileInputRef.current.setAttribute("capture", "environment");
                 fileInputRef.current.removeAttribute("multiple");
                 fileInputRef.current.click();
@@ -512,7 +534,7 @@ function FotoEtiquetaTab() {
 // QR SCANNER TAB
 // ============================================================
 
-function QrScannerTab() {
+function QrScannerTab({ onGoToFoto }: { onGoToFoto: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<QrResult | null>(null);
   const [manualInput, setManualInput] = useState("");
@@ -553,8 +575,8 @@ function QrScannerTab() {
     playDoubleBeep();
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
-    const { tracking, fields } = parseQrCode(raw);
-    setResult({ raw, tracking, fields, searching: true });
+    const { tracking, fields, isMlFlex } = parseQrCode(raw);
+    setResult({ raw, tracking, fields, isMlFlex, searching: true });
     setSaved(false);
 
     // Stop scanner
@@ -621,8 +643,8 @@ function QrScannerTab() {
   const handleManualSearch = async () => {
     const code = manualInput.trim();
     if (!code) return;
-    const { tracking, fields } = parseQrCode(code);
-    setResult({ raw: code, tracking, fields, searching: true });
+    const { tracking, fields, isMlFlex } = parseQrCode(code);
+    setResult({ raw: code, tracking, fields, isMlFlex, searching: true });
     setSaved(false);
     const existing = await searchExisting(tracking);
     setResult((prev) => prev ? { ...prev, existing, searching: false } : prev);
@@ -753,7 +775,23 @@ function QrScannerTab() {
               <p className="text-[14px] font-bold text-accent font-mono">{result.tracking}</p>
             </div>
 
-            {Object.entries(result.fields).filter(([k]) => k !== "id" && k !== "tracking_id" && k !== "barcode" && k !== "code").map(([key, value]) => (
+            {result.isMlFlex && (
+              <div className="rounded-xl p-3 bg-blue-500/[0.08] border border-blue-500/20">
+                <p className="text-[12px] text-blue-300 leading-relaxed">
+                  El QR de <span className="font-bold">Mercado Libre Flex</span> solo contiene el número de envío —
+                  la dirección, el destinatario y la referencia <span className="font-bold">no vienen en el QR</span>, están impresos en el papel.
+                </p>
+                <button
+                  onClick={onGoToFoto}
+                  className="mt-2.5 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[12px] font-bold active:scale-[0.98] transition-all"
+                >
+                  <Camera className="w-4 h-4" />
+                  Sacar foto a la etiqueta para leer todo
+                </button>
+              </div>
+            )}
+
+            {Object.entries(result.fields).filter(([k]) => k !== "Nro. de envío" && k !== "id" && k !== "tracking_id" && k !== "barcode" && k !== "code").map(([key, value]) => (
               <div key={key} className="rounded-xl p-3 bg-background">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Hash className="w-3.5 h-3.5 text-muted" />
