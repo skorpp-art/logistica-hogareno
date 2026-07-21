@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { localDateStr } from "@/lib/dates";
 import {
   ScanLine,
   Package,
@@ -397,7 +398,7 @@ function FotoEtiquetaTab() {
     setSavingIds((prev) => new Set(prev).add(photo.id));
 
     const supabase = createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const today = localDateStr();
 
     // Dirección de destino: preferir calle+número; si no, la dirección completa
     const destAddress = ext.calle || ext.direccion_completa || "";
@@ -694,7 +695,7 @@ function QrScannerTab({ onGoToFoto }: { onGoToFoto: () => void }) {
     setSaving(true);
 
     const supabase = createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const today = localDateStr();
 
     const destAddress = result.fields.direccion || result.fields.address || "";
     const destLocality = result.fields.localidad || result.fields.city || "";
