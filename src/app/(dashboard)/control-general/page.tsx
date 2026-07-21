@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { localDateStr } from "@/lib/dates";
 import StatsCard from "@/components/dashboard/StatsCard";
 import AlertBanner from "@/components/dashboard/AlertBanner";
 import TopClientsTable from "@/components/dashboard/TopClientsTable";
@@ -63,7 +64,7 @@ export default function ControlGeneralPage() {
   const fetchDashboard = async () => {
     const supabase = createClient();
     const today = new Date();
-    const todayStr = today.toISOString().split("T")[0];
+    const todayStr = localDateStr(today);
 
     const [
       { count: totalStock },
@@ -125,7 +126,7 @@ export default function ControlGeneralPage() {
       })
       .filter(Boolean) as string[];
 
-    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    const tomorrowStr = localDateStr(tomorrow);
     const { data: tomorrowReturns } = await supabase
       .from("bultos")
       .select("id, clients(name)")
@@ -190,7 +191,7 @@ export default function ControlGeneralPage() {
     // Old stock alerts (>15 days)
     const fifteenDaysAgo = new Date();
     fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
-    const fifteenStr = fifteenDaysAgo.toISOString().split("T")[0];
+    const fifteenStr = localDateStr(fifteenDaysAgo);
 
     const { data: oldBultos, count: oldCount } = await supabase
       .from("bultos")

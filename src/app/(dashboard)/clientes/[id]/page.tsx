@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { localDateStr } from "@/lib/dates";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -416,7 +417,7 @@ function ClienteDetailContent() {
       .update({
         deleted_at: new Date().toISOString(),
         status: "returned",
-        actual_return_date: new Date().toISOString().split("T")[0],
+        actual_return_date: localDateStr(),
         remito_number: docNumber,
       })
       .in("id", bultoIds);

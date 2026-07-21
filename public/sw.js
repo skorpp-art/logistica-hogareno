@@ -16,9 +16,12 @@ self.addEventListener("activate", (event) => {
 });
 
 // Network-first: siempre datos frescos, con fallback a caché si no hay conexión.
+// Solo cachea recursos de la propia app (no llamadas a Supabase u otras APIs).
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
   event.respondWith(
     fetch(req)
       .then((res) => {

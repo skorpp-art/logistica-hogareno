@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import type { Client } from "@/lib/types/database";
+import { localDateStr } from "@/lib/dates";
 
 interface BultoRow {
   id: string;
@@ -31,6 +32,7 @@ interface BultoRow {
   entry_date: string;
   scheduled_return_date: string | null;
   actual_return_date: string | null;
+  remito_number: number | null;
   deleted_at: string | null;
   created_at: string;
   clients: { name: string } | null;
@@ -47,12 +49,12 @@ export default function ControlOperativoPage() {
   const [rangeFrom, setRangeFrom] = useState(() => {
     const d = new Date();
     d.setDate(1);
-    return d.toISOString().split("T")[0];
+    return localDateStr(d);
   });
   const [rangeTo, setRangeTo] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 1, 0);
-    return d.toISOString().split("T")[0];
+    return localDateStr(d);
   });
 
   const [allBultos, setAllBultos] = useState<BultoRow[]>([]);
@@ -166,14 +168,7 @@ export default function ControlOperativoPage() {
     // Switch to bultos tab
     setActiveTab("bultos");
 
-    // Set filter to show this bulto
-    if (bulto.status === "returned") {
-      // If returned, we need to set filter to show all including returned
-      // But the current filters don't include returned, so just set to "all"
-      setFilterStatus("all");
-    } else {
-      setFilterStatus("all");
-    }
+    setFilterStatus("all");
 
     // Find what page the bulto is on and navigate there
     setTimeout(() => {
@@ -225,24 +220,39 @@ export default function ControlOperativoPage() {
       (b) => b.status === "returned" && b.actual_return_date
     );
 
-    const totalReturns = returned.length;
+    // Bultos devueltos en el período
+    const returnedBultos = returned.length;
 
+    // Devoluciones = documentos/remitos exportados (no bultos).
+    // Se agrupa por remito_number; los viejos sin número, por cliente+fecha.
+    const docsByDate: Record<string, Set<string>> = {};
+    returned.forEach((b) => {
+      const d = b.actual_return_date!;
+      const docKey =
+        b.remito_number != null ? `r${b.remito_number}` : `${b.client_id}-${d}`;
+      if (!docsByDate[d]) docsByDate[d] = new Set();
+      docsByDate[d].add(docKey);
+    });
+    const returnsByDate: Record<string, number> = {};
+    Object.entries(docsByDate).forEach(([d, set]) => {
+      returnsByDate[d] = set.size;
+    });
+    const totalReturns = Object.values(returnsByDate).reduce((a, c) => a + c, 0);
+
+    // Días laborales del rango, sin contar días futuros
     const from = new Date(rangeFrom);
     const to = new Date(rangeTo);
+    const todayLimit = new Date(localDateStr() + "T00:00:00");
+    const effectiveTo = to > todayLimit ? todayLimit : to;
     let workDays = 0;
     const current = new Date(from);
-    while (current <= to) {
+    while (current <= effectiveTo) {
       const day = current.getDay();
       if (day !== 0 && day !== 6) workDays++;
       current.setDate(current.getDate() + 1);
     }
     const avgPerDay = workDays > 0 ? (totalReturns / workDays).toFixed(1) : "0";
 
-    const returnsByDate: Record<string, number> = {};
-    returned.forEach((b) => {
-      const d = b.actual_return_date!;
-      returnsByDate[d] = (returnsByDate[d] || 0) + 1;
-    });
     let peakDate = "-";
     let peakCount = 0;
     Object.entries(returnsByDate).forEach(([date, count]) => {
@@ -314,6 +324,7 @@ export default function ControlOperativoPage() {
 
     return {
       totalReturns,
+      returnedBultos,
       avgPerDay,
       peakDate,
       peakCount,
@@ -337,7 +348,7 @@ export default function ControlOperativoPage() {
       description: form.description || null,
       barcode: form.barcode || null,
       status: form.scheduled_return_date ? "scheduled_return" : "stored",
-      entry_date: new Date().toISOString().split("T")[0],
+      entry_date: localDateStr(),
       scheduled_return_date: form.scheduled_return_date || null,
     });
     setForm({ client_id: "", description: "", barcode: "", scheduled_return_date: "" });
@@ -351,7 +362,7 @@ export default function ControlOperativoPage() {
       .from("bultos")
       .update({
         status: "returned",
-        actual_return_date: new Date().toISOString().split("T")[0],
+        actual_return_date: localDateStr(),
       })
       .eq("id", id);
     fetchData();
@@ -383,8 +394,8 @@ export default function ControlOperativoPage() {
     const XLSX = await import("xlsx");
 
     const onTimeRate =
-      metrics.totalReturns > 0
-        ? Math.round((metrics.onTime / metrics.totalReturns) * 100) + "%"
+      metrics.returnedBultos > 0
+        ? Math.round((metrics.onTime / metrics.returnedBultos) * 100) + "%"
         : "N/A";
 
     // Sheet 1: Resumen
@@ -393,8 +404,9 @@ export default function ControlOperativoPage() {
       ["Período", `${formatDate(rangeFrom)} - ${formatDate(rangeTo)}`],
       ["", ""],
       ["Métrica", "Valor"],
-      ["Total devoluciones en período", metrics.totalReturns],
-      ["Promedio por día laboral", metrics.avgPerDay],
+      ["Devoluciones en período (documentos)", metrics.totalReturns],
+      ["Bultos devueltos en período", metrics.returnedBultos],
+      ["Promedio de devoluciones por día laboral", metrics.avgPerDay],
       ["Día pico", `${formatDate(metrics.peakDate)} (${metrics.peakCount} devoluciones)`],
       ["Tiempo promedio almacenamiento (días)", metrics.avgStorageDays],
       ["Stock antiguo (>3 días)", metrics.oldStock],
@@ -649,7 +661,7 @@ export default function ControlOperativoPage() {
       {/* Top stats row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 stagger-children">
         {[
-          { icon: Package, label: "Total período", value: metrics.totalReturns, sub: "Documentos Generados", gradient: "stat-blue", iconColor: "text-blue-400", iconBg: "bg-blue-500/10" },
+          { icon: Package, label: "Total período", value: metrics.totalReturns, sub: `Devoluciones · ${metrics.returnedBultos} bultos`, gradient: "stat-blue", iconColor: "text-blue-400", iconBg: "bg-blue-500/10" },
           { icon: TrendingUp, label: "Promedio / Salida", value: metrics.avgPerDay, sub: "Por Día Laboral", gradient: "stat-green", iconColor: "text-emerald-400", iconBg: "bg-emerald-500/10" },
           { icon: Calendar, label: "Día pico", value: formatDate(metrics.peakDate), sub: `${metrics.peakCount} devoluciones`, gradient: "stat-purple", iconColor: "text-purple-400", iconBg: "bg-purple-500/10" },
           { icon: Clock, label: "Tiempo promedio", value: metrics.avgStorageDays, sub: "Días almacenamiento", gradient: "stat-amber", iconColor: "text-amber-400", iconBg: "bg-amber-500/10" },
@@ -811,7 +823,7 @@ export default function ControlOperativoPage() {
           <div className="grid grid-cols-2 gap-3">
             {[
               { value: metrics.activeBultos, label: "Almacenados", color: "blue" },
-              { value: metrics.totalReturns, label: "Devueltos", color: "emerald" },
+              { value: metrics.returnedBultos, label: "Devueltos", color: "emerald" },
               { value: metrics.onTime, label: "A tiempo", color: "amber" },
               { value: metrics.late, label: "Con demora", color: "red" },
             ].map((item) => (
@@ -825,13 +837,13 @@ export default function ControlOperativoPage() {
               </div>
             ))}
           </div>
-          {metrics.totalReturns > 0 && (
+          {metrics.returnedBultos > 0 && (
             <div className="mt-5">
               <div className="flex justify-between text-[11px] text-muted mb-2 font-semibold">
                 <span>Tasa de puntualidad</span>
                 <span className="text-foreground">
                   {Math.round(
-                    (metrics.onTime / Math.max(metrics.totalReturns, 1)) * 100
+                    (metrics.onTime / Math.max(metrics.returnedBultos, 1)) * 100
                   )}%
                 </span>
               </div>
@@ -839,7 +851,7 @@ export default function ControlOperativoPage() {
                 <div
                   className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full animate-bar-grow"
                   style={{
-                    width: `${(metrics.onTime / Math.max(metrics.totalReturns, 1)) * 100}%`,
+                    width: `${(metrics.onTime / Math.max(metrics.returnedBultos, 1)) * 100}%`,
                   }}
                 />
               </div>
