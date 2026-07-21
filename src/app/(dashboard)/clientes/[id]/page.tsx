@@ -417,6 +417,7 @@ function ClienteDetailContent() {
         deleted_at: new Date().toISOString(),
         status: "returned",
         actual_return_date: new Date().toISOString().split("T")[0],
+        remito_number: docNumber,
       })
       .in("id", bultoIds);
 

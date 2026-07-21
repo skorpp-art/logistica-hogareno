@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS stock_alerts (
   created_at timestamptz DEFAULT now()
 );
 
+-- 4b. Número de remito en cada bulto devuelto (para el historial de devoluciones)
+ALTER TABLE bultos ADD COLUMN IF NOT EXISTS remito_number integer;
+CREATE INDEX IF NOT EXISTS idx_bultos_remito_number ON bultos(remito_number);
+CREATE INDEX IF NOT EXISTS idx_bultos_actual_return_date ON bultos(actual_return_date);
+
 -- 5. Índices
 CREATE INDEX IF NOT EXISTS idx_bultos_client_id ON bultos(client_id);
 CREATE INDEX IF NOT EXISTS idx_bultos_status ON bultos(status);
