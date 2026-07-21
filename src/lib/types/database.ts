@@ -23,6 +23,7 @@ export interface Bulto {
   actual_return_date: string | null;
   destination_address: string | null;
   destination_locality: string | null;
+  remito_number: number | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

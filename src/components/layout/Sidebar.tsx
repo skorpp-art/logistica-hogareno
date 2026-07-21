@@ -9,11 +9,10 @@ import {
   Calendar,
   BookUser,
   Trash2,
-  MessageSquare,
   LogOut,
   Package,
   ScanLine,
-  Truck,
+  History,
   X,
   Download,
 } from "lucide-react";
@@ -27,9 +26,8 @@ const navItems = [
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/directorio", label: "Directorio", icon: BookUser },
   { href: "/escaner", label: "Escáner", icon: ScanLine },
-  { href: "/ruteo", label: "Ruteo", icon: Truck },
+  { href: "/historial", label: "Historial", icon: History },
   { href: "/papelera", label: "Papelera", icon: Trash2 },
-  { href: "/asistente", label: "Asistente", icon: MessageSquare },
 ];
 
 interface SidebarProps {
