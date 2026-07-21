@@ -267,8 +267,10 @@ export default function ControlOperativoPage() {
       .slice(0, 7)
       .map(([date, count]) => ({ date, count }));
 
+    // En depósito = todo bulto no devuelto ni borrado, sin importar el estado
+    // (ALMACENADO, CANCELADO, CAMBIO, DEVOLUCIÓN, etc. están físicamente acá)
     const activeBultos = allBultos.filter(
-      (b) => b.deleted_at === null && b.status === "stored"
+      (b) => b.deleted_at === null && b.status !== "returned"
     );
     const byClient: Record<string, { name: string; count: number }> = {};
     activeBultos.forEach((b) => {
@@ -412,7 +414,7 @@ export default function ControlOperativoPage() {
       ["Stock antiguo (>3 días)", metrics.oldStock],
       ["Tasa de puntualidad", onTimeRate],
       ["Total bultos activos", metrics.totalBultos],
-      ["Almacenados actualmente", metrics.activeBultos],
+      ["En depósito actualmente", metrics.activeBultos],
       ["Devueltos a tiempo", metrics.onTime],
       ["Devueltos con demora", metrics.late],
     ];
@@ -822,7 +824,7 @@ export default function ControlOperativoPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { value: metrics.activeBultos, label: "Almacenados", color: "blue" },
+              { value: metrics.activeBultos, label: "En depósito", color: "blue" },
               { value: metrics.returnedBultos, label: "Devueltos", color: "emerald" },
               { value: metrics.onTime, label: "A tiempo", color: "amber" },
               { value: metrics.late, label: "Con demora", color: "red" },
@@ -889,7 +891,7 @@ export default function ControlOperativoPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
               {[
                 { value: metrics.totalBultos, label: "Total activos" },
-                { value: metrics.activeBultos, label: "Almacenados" },
+                { value: metrics.activeBultos, label: "En depósito" },
                 { value: `${metrics.avgStorageDays}d`, label: "Promedio" },
                 { value: metrics.oldStock, label: "Stock >3d" },
               ].map((item) => (
