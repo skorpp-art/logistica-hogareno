@@ -166,7 +166,7 @@ export default function HistorialPage() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-bold text-foreground">
-            {r.remitoNumber != null ? `Remito N° ${String(r.remitoNumber).padStart(4, "0")}` : "Devolución"}
+            {r.remitoNumber != null ? `DOC N° ${String(r.remitoNumber).padStart(4, "0")}` : "Devolución"}
           </p>
           <p className="text-[11px] text-muted flex items-center gap-1">
             <Calendar className="w-3 h-3" /> {formatDate(r.date)}
