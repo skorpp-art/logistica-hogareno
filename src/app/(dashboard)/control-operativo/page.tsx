@@ -270,18 +270,26 @@ export default function ControlOperativoPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    const criticalClients = Object.values(byClient).filter(
-      (c) => c.count > 10
-    );
-
     const today = new Date();
-    const oldStock = activeBultos.filter((b) => {
-      const entry = new Date(b.entry_date);
-      const diffDays = Math.floor(
-        (today.getTime() - entry.getTime()) / (1000 * 60 * 60 * 24)
+    const daysStored = (b: (typeof activeBultos)[number]) =>
+      Math.floor(
+        (today.getTime() - new Date(b.entry_date).getTime()) / (1000 * 60 * 60 * 24)
       );
-      return diffDays > 7;
+
+    // Stock antiguo: paquetes con más de 3 días en depósito
+    const oldStock = activeBultos.filter((b) => daysStored(b) > 3);
+
+    // Stock crítico: paquetes con más de 7 días en depósito, agrupados por cliente
+    const criticalByClient: Record<string, { name: string; count: number }> = {};
+    activeBultos.forEach((b) => {
+      if (daysStored(b) > 7) {
+        const name = b.clients?.name || "Sin cliente";
+        if (!criticalByClient[b.client_id])
+          criticalByClient[b.client_id] = { name, count: 0 };
+        criticalByClient[b.client_id].count++;
+      }
     });
+    const criticalClients = Object.values(criticalByClient);
 
     const avgStorageDays =
       activeBultos.length > 0
@@ -389,7 +397,7 @@ export default function ControlOperativoPage() {
       ["Promedio por día laboral", metrics.avgPerDay],
       ["Día pico", `${formatDate(metrics.peakDate)} (${metrics.peakCount} devoluciones)`],
       ["Tiempo promedio almacenamiento (días)", metrics.avgStorageDays],
-      ["Stock antiguo (>7 días)", metrics.oldStock],
+      ["Stock antiguo (>3 días)", metrics.oldStock],
       ["Tasa de puntualidad", onTimeRate],
       ["Total bultos activos", metrics.totalBultos],
       ["Almacenados actualmente", metrics.activeBultos],
@@ -645,7 +653,7 @@ export default function ControlOperativoPage() {
           { icon: TrendingUp, label: "Promedio / Salida", value: metrics.avgPerDay, sub: "Por Día Laboral", gradient: "stat-green", iconColor: "text-emerald-400", iconBg: "bg-emerald-500/10" },
           { icon: Calendar, label: "Día pico", value: formatDate(metrics.peakDate), sub: `${metrics.peakCount} devoluciones`, gradient: "stat-purple", iconColor: "text-purple-400", iconBg: "bg-purple-500/10" },
           { icon: Clock, label: "Tiempo promedio", value: metrics.avgStorageDays, sub: "Días almacenamiento", gradient: "stat-amber", iconColor: "text-amber-400", iconBg: "bg-amber-500/10" },
-          { icon: AlertTriangle, label: "Stock antiguo", value: metrics.oldStock, sub: "Bultos >7 días", gradient: "stat-red", iconColor: "text-red-400", iconBg: "bg-red-500/10" },
+          { icon: AlertTriangle, label: "Stock antiguo", value: metrics.oldStock, sub: "Bultos >3 días", gradient: "stat-red", iconColor: "text-red-400", iconBg: "bg-red-500/10" },
         ].map((stat) => (
           <div key={stat.label} className={`card-base p-5 animate-fade-in ${stat.gradient}`}>
             <div className="flex items-center justify-between mb-3">
@@ -712,7 +720,7 @@ export default function ControlOperativoPage() {
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <h2 className="text-[13px] font-bold text-foreground">
-              Stock Crítico (&gt;10 Paquetes)
+              Stock Crítico (&gt;7 días)
             </h2>
           </div>
           {metrics.criticalClients.length === 0 ? (
@@ -722,7 +730,7 @@ export default function ControlOperativoPage() {
               </div>
               <p className="text-sm font-semibold text-foreground">Todo bajo control</p>
               <p className="text-[11px] text-muted mt-1">
-                Ningún cliente supera el límite de alerta
+                Ningún paquete supera los 7 días en depósito
               </p>
             </div>
           ) : (
@@ -871,7 +879,7 @@ export default function ControlOperativoPage() {
                 { value: metrics.totalBultos, label: "Total activos" },
                 { value: metrics.activeBultos, label: "Almacenados" },
                 { value: `${metrics.avgStorageDays}d`, label: "Promedio" },
-                { value: metrics.oldStock, label: "Stock >7d" },
+                { value: metrics.oldStock, label: "Stock >3d" },
               ].map((item) => (
                 <div key={item.label} className="p-4 border border-card-border rounded-xl">
                   <p className="text-xl font-extrabold text-foreground tracking-tight">{item.value}</p>
