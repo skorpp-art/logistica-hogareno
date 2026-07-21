@@ -302,6 +302,7 @@ export default function ControlOperativoPage() {
       }
     });
     const criticalClients = Object.values(criticalByClient);
+    const criticalTotal = criticalClients.reduce((n, c) => n + c.count, 0);
 
     const avgStorageDays =
       activeBultos.length > 0
@@ -333,6 +334,7 @@ export default function ControlOperativoPage() {
       activityDates,
       clientDistribution,
       criticalClients,
+      criticalTotal,
       oldStock: oldStock.length,
       avgStorageDays,
       activeBultos: activeBultos.length,
@@ -736,6 +738,11 @@ export default function ControlOperativoPage() {
             <h2 className="text-[13px] font-bold text-foreground">
               Stock Crítico (&gt;7 días)
             </h2>
+            {metrics.criticalTotal > 0 && (
+              <span className="ml-auto text-[12px] font-bold text-red-400 bg-red-500/10 px-3 py-1 rounded-full">
+                {metrics.criticalTotal} paquete{metrics.criticalTotal !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
           {metrics.criticalClients.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10">
