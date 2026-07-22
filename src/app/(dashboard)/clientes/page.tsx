@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { normalizeText } from "@/lib/dates";
 import type { Client } from "@/lib/types/database";
 
 export default function ClientesPage() {
@@ -343,13 +344,13 @@ function ClientesContent() {
 
   const filtered = clients
     .filter((c) => {
-      // Text search
-      const q = search.toLowerCase();
+      // Text search (sin distinguir tildes ni mayúsculas)
+      const q = normalizeText(search);
       const matchesSearch =
         !q ||
-        c.name.toLowerCase().includes(q) ||
-        (c.nombre_fantasia && c.nombre_fantasia.toLowerCase().includes(q)) ||
-        (c.address && c.address.toLowerCase().includes(q));
+        normalizeText(c.name).includes(q) ||
+        (c.nombre_fantasia && normalizeText(c.nombre_fantasia).includes(q)) ||
+        (c.address && normalizeText(c.address).includes(q));
       if (!matchesSearch) return false;
 
       // Filter
