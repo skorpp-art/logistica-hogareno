@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Loader2,
   User,
+  Download,
 } from "lucide-react";
 
 interface ReturnedBulto {
@@ -20,7 +21,9 @@ interface ReturnedBulto {
   description: string | null;
   tracking_id: string | null;
   barcode: string | null;
+  entry_date: string;
   actual_return_date: string | null;
+  status: string;
   remito_number: number | null;
   destination_address: string | null;
   destination_locality: string | null;
@@ -71,7 +74,105 @@ function groupIntoRemitos(bultos: ReturnedBulto[]): Remito[] {
 }
 
 const SELECT =
-  "id, client_id, description, tracking_id, barcode, actual_return_date, remito_number, destination_address, destination_locality, clients(name, nombre_fantasia)";
+  "id, client_id, description, tracking_id, barcode, entry_date, actual_return_date, status, remito_number, destination_address, destination_locality, clients(name, nombre_fantasia)";
+
+const STATUS_LABELS: Record<string, string> = {
+  stored: "ALMACENADO",
+  scheduled_return: "RETORNO PROG.",
+  returned: "DEVUELTO",
+  cancelled: "CANCELADO",
+  duplicate: "DUPLICADO",
+  cambio: "CAMBIO",
+  devolucion: "DEVOLUCIÓN",
+  rechazado: "RECHAZADO",
+  ficha: "FICHA",
+};
+
+// Reimprime el remito de una devolución existente (solo abre ventana de impresión)
+function printRemito(r: Remito) {
+  const win = window.open("", "_blank");
+  if (!win) return;
+
+  const docLabel = r.remitoNumber != null ? String(r.remitoNumber).padStart(4, "0") : "—";
+  const rows = r.bultos
+    .map(
+      (b) => `
+      <tr>
+        <td>${b.tracking_id || b.barcode || "-"}</td>
+        <td>${b.description || "-"}</td>
+        <td>${formatDate(b.entry_date)}</td>
+        <td>${
+          b.destination_address
+            ? b.destination_address + (b.destination_locality ? " - " + b.destination_locality : "")
+            : "-"
+        }</td>
+        <td class="status">${STATUS_LABELS[b.status] || b.status}</td>
+      </tr>`
+    )
+    .join("");
+
+  win.document.write(`
+    <!DOCTYPE html><html><head><title>Remito ${docLabel} - ${r.clientName}</title>
+    <style>
+      @page { margin: 10mm; }
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: Arial, sans-serif; color:#111; padding:30px; }
+      .header { display:flex; justify-content:space-between; align-items:start; margin-bottom:20px; border-bottom:3px solid #111; padding-bottom:15px; }
+      .logo-area { display:flex; align-items:center; gap:12px; }
+      .logo-box { width:40px; height:40px; border:3px solid #111; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+      .title { font-size:24px; font-weight:bold; }
+      .subtitle { font-size:11px; color:#555; margin-top:2px; }
+      .doc-info { text-align:right; font-size:12px; }
+      .doc-info strong { display:block; }
+      .doc-info span { display:block; margin-top:2px; }
+      .client-box { background:#f3f4f6; padding:15px 20px; border-radius:6px; margin-bottom:20px; }
+      .client-box .name { font-weight:bold; text-transform:uppercase; font-size:14px; }
+      .client-box .meta { display:flex; justify-content:space-between; margin-top:5px; font-size:12px; color:#555; }
+      table { width:100%; border-collapse:collapse; margin-bottom:30px; }
+      th { background:#f9fafb; text-align:left; padding:8px 10px; font-size:11px; text-transform:uppercase; color:#555; border-bottom:2px solid #ddd; }
+      td { padding:8px 10px; font-size:12px; border-bottom:1px solid #eee; word-wrap:break-word; max-width:180px; }
+      .status { font-weight:bold; font-size:11px; }
+      .signatures { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-top:40px; border-top:2px solid #111; padding-top:20px; }
+      .sig-box { text-align:center; padding-top:40px; border-top:1px solid #999; }
+      .sig-box .role { font-weight:bold; font-size:12px; }
+      .sig-box .desc { font-size:10px; color:#777; font-style:italic; }
+    </style></head><body>
+      <div class="header">
+        <div class="logo-area">
+          <div class="logo-box">LH</div>
+          <div>
+            <div class="title">LOGISTICA HOGARE&Ntilde;O</div>
+            <div class="subtitle">FICHA DE CONTROL E INVENTARIO DE STOCK</div>
+          </div>
+        </div>
+        <div class="doc-info">
+          <strong>DOC N&deg;: ${docLabel}</strong>
+          <span>FECHA: ${formatDate(r.date)}</span>
+        </div>
+      </div>
+      <div class="client-box">
+        <div class="name">${r.clientName}</div>
+        <div class="meta">
+          <span>TIPO DE OPERACI&Oacute;N: DEVOLUCI&Oacute;N</span>
+          <span>TOTAL BULTOS: ${r.bultos.length}</span>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Tracking</th><th>Art&iacute;culo / Notas</th><th>Fecha</th><th>Destino</th><th>Estado</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="signatures">
+        <div class="sig-box"><div class="role">ENCARGADO DE DEP&Oacute;SITO</div><div class="desc">Autorizaci&oacute;n de Salida</div></div>
+        <div class="sig-box"><div class="role">CONDUCTOR LOG&Iacute;STICO</div><div class="desc">Verificaci&oacute;n y Carga</div></div>
+        <div class="sig-box"><div class="role">CLIENTE RECEPTOR</div><div class="desc">Recibido Conforme</div></div>
+      </div>
+      <script>window.onload=function(){window.print();}<\/script>
+    </body></html>
+  `);
+  win.document.close();
+}
 
 export default function HistorialPage() {
   const [recent, setRecent] = useState<ReturnedBulto[]>([]);
@@ -174,6 +275,16 @@ export default function HistorialPage() {
         </div>
         <span className="text-[11px] font-bold text-accent bg-accent/10 px-2.5 py-1 rounded-full shrink-0">
           {r.bultos.length} bulto{r.bultos.length !== 1 ? "s" : ""}
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { e.stopPropagation(); printRemito(r); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); printRemito(r); } }}
+          title="Exportar PDF"
+          className="p-1.5 rounded-lg text-muted hover:text-blue-500 hover:bg-blue-500/10 transition-all shrink-0"
+        >
+          <Download className="w-4 h-4" />
         </span>
         {expanded === r.key ? (
           <ChevronUp className="w-4 h-4 text-muted shrink-0" />
